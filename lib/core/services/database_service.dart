@@ -595,28 +595,6 @@ class DatabaseService {
     await _createGarantiesTable(db);
     await _createRecoveryActionsTable(db);
 
-    await db.execute('''
-      CREATE TABLE message_templates (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        content TEXT NOT NULL,
-        type TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE notification_logs (
-        id TEXT PRIMARY KEY,
-        client_id TEXT,
-        recipient TEXT NOT NULL,
-        message TEXT NOT NULL,
-        status TEXT NOT NULL,
-        timestamp TEXT NOT NULL,
-        type TEXT NOT NULL
-      )
-    ''');
-
     await _seedInitialTemplates(db);
   }
 
@@ -2799,7 +2777,7 @@ class DatabaseService {
       // Try to get real name if 'name' is an ID
       String displayName = agentName;
       if (row['code'] != null) {
-        final agent = await getAgentById(row['code']!);
+        final agent = await getAgentById(row['code'].toString());
         if (agent != null) displayName = agent.fullName;
       }
 
@@ -3303,6 +3281,32 @@ class DatabaseService {
       },
       where: 'id = ?',
       whereArgs: [agent.id],
+    );
+  }
+
+  Future<Agent?> getAgentById(String id) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'agents',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (maps.isEmpty) return null;
+    final stats = await getAgentStats(id);
+    final baseAgent = Agent.fromMap(maps.first);
+    return Agent(
+      id: baseAgent.id,
+      firstName: baseAgent.firstName,
+      lastName: baseAgent.lastName,
+      email: baseAgent.email,
+      phone: baseAgent.phone,
+      role: baseAgent.role,
+      agencyId: baseAgent.agencyId,
+      isActive: baseAgent.isActive,
+      hiredDate: baseAgent.hiredDate,
+      photoUrl: baseAgent.photoUrl,
+      associatedAccountId: baseAgent.associatedAccountId,
+      stats: stats,
     );
   }
 

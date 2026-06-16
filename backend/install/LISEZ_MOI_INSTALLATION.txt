@@ -1,0 +1,50 @@
+╔══════════════════════════════════════════════════════════╗
+║        SIGMA Micro-Finance — Guide d'installation        ║
+╚══════════════════════════════════════════════════════════╝
+
+POUR L'INSTALLATEUR (vous, le technicien) :
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AVANT de remettre le PC au client, placez ces fichiers
+dans le dossier install\ :
+
+  1. python-3.11.9-amd64.exe
+     → https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe
+
+  2. postgresql-15-windows-x64.exe
+     → https://get.enterprisedb.com/postgresql/postgresql-15.8-1-windows-x64.exe
+
+  3. nssm.exe  (optionnel — pour le service Windows automatique)
+     → https://nssm.cc/release/nssm-2.24.zip  (extraire nssm.exe 64-bit)
+
+Ensuite, SUR LE PC SERVEUR DU CLIENT :
+  1. Clic droit sur "install_serveur.bat"
+  2. "Exécuter en tant qu'administrateur"
+  3. Attendre que l'installation se termine (~5 minutes)
+  4. L'application démarre automatiquement.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+POUR LE CLIENT (utilisateur final) :
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DÉMARRAGE NORMAL (si le serveur ne se lance pas seul) :
+  → Double-cliquer sur "demarrer_serveur.bat"
+  → Laisser cette fenêtre ouverte pendant toute la journée
+  → L'icône verte dans la barre des tâches indique que c'est actif
+
+ARRÊT DU SERVEUR :
+  → Fermer la fenêtre noire du serveur
+  → Ou Ctrl+C dans la fenêtre
+
+EN CAS DE PROBLÈME :
+  → Consulter le fichier install\install.log
+  → Contacter le support technique
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IDENTIFIANTS PAR DÉFAUT (à changer après installation) :
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Administrateur : admin / Admin2024!
+  Base de données : sigma_user / SigmaMF2024!
+
+⚠️  IMPORTANT : Changer ces mots de passe après la première connexion !

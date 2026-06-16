@@ -175,8 +175,9 @@ class PortfolioChart extends StatelessWidget {
   }
 
   double _getMaxY() {
+    if (data.isEmpty) return 20.0;
     final maxValue = data.map((e) => e.value).reduce((a, b) => a > b ? a : b);
-    return (maxValue / 20).ceil() * 20 + 20;
+    return (maxValue / 20).ceil() * 20 + 20.0;
   }
 
   List<BarChartGroupData> _buildBarGroups(ThemeData theme) {
