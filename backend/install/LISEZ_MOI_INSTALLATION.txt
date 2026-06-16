@@ -1,58 +1,151 @@
 ╔══════════════════════════════════════════════════════════════╗
-║         SIGMA Micro-Finance — Guide d'installation           ║
+║         SIGMA Micro-Finance — Guide complet                  ║
+║         (Technicien + Client)                                ║
 ╚══════════════════════════════════════════════════════════════╝
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-POUR VOUS (le technicien) — AVANT LA LIVRAISON
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-MÉTHODE RECOMMANDÉE (aucune installation Python chez le client) :
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 1 — POUR LE TECHNICIEN (avant livraison)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  1. Sur VOTRE PC de développement, lancez :
-        backend\install\build_exe.bat
-     Cela génère sigma_server.exe (tout Python inclus dedans).
+ÉTAPE 1 : Préparer les exécutables (sur votre PC de développement)
+──────────────────────────────────────────────────────────────────
 
-  2. Copiez ces fichiers dans le dossier install\ du client :
-        sigma_server.exe            (généré ci-dessus)
-        postgresql-15-windows-x64.exe  (si PostgreSQL absent)
-            → https://www.postgresql.org/download/windows/
+  A) Compiler le serveur API (une seule fois par version) :
+       Double-cliquer sur : backend\install\build_exe.bat
+       → Génère : backend\install\sigma_server.exe
+         (Python totalement inclus dedans, rien à installer)
 
-  3. Livrez le dossier SIGMA entier sur le PC serveur du client.
+  B) Compiler l'application Flutter client :
+       Dans un terminal : flutter build windows --release
+       → Génère : build\windows\x64\runner\Release\sigma.exe
+         (et ses fichiers DLL associés)
 
-  4. Sur le PC serveur :
-        Clic droit sur install_serveur.bat
-        "Exécuter en tant qu'administrateur"
-        → 5 minutes, tout s'installe seul.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-POUR LE CLIENT — UTILISATION QUOTIDIENNE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ÉTAPE 2 : Créer le dossier de livraison
+────────────────────────────────────────
 
-Le serveur démarre AUTOMATIQUEMENT à chaque allumage du PC.
-Aucune action requise normalement.
+  Créer un dossier SIGMA_Livraison\ avec UNIQUEMENT ces fichiers :
 
-Si le serveur ne répond pas :
-  → Double-cliquer sur demarrer_serveur.bat
-  → Laisser la fenêtre ouverte
+  SIGMA_Livraison\
+  ├── SERVEUR\                        ← PC serveur uniquement
+  │   ├── sigma_server.exe            ← serveur API compilé
+  │   ├── install_serveur.bat         ← installateur (clic droit admin)
+  │   ├── demarrer_serveur.bat        ← démarrage manuel si besoin
+  │   ├── nssm-2.24\win64\nssm.exe   ← service Windows automatique
+  │   └── postgresql-15-windows-x64.exe  ← si PostgreSQL absent
+  │
+  └── APPLICATION\                   ← tous les postes clients
+      ├── sigma.exe                   ← app Flutter compilée
+      ├── flutter_windows.dll
+      ├── data\
+      └── (autres fichiers DLL générés par flutter build)
 
-Pour vérifier que le serveur tourne :
+  ⚠️  NE PAS LIVRER au client :
+      - lib\, android\, ios\, web\    (code source Flutter)
+      - .git\, .dart_tool\, build\    (outils de développement)
+      - backend\app\, backend\alembic\ (code source Python)
+      - analyse_projet.md, GEMINI.md  (documents internes)
+      - install\build_exe.bat         (outil de dev uniquement)
+      - install\python-3.11.9-amd64.exe (plus nécessaire avec l'exe)
+
+
+ÉTAPE 3 : Installation chez le client (PC SERVEUR)
+───────────────────────────────────────────────────
+
+  1. Copier le dossier SIGMA_Livraison\SERVEUR\ sur le PC serveur
+     (ex: dans C:\SIGMA\)
+
+  2. Clic droit sur install_serveur.bat
+     → "Exécuter en tant qu'administrateur"
+
+  3. Attendre ~5 minutes — tout s'installe automatiquement :
+     ✓ PostgreSQL (base de données)
+     ✓ Base sigma_db + utilisateurs
+     ✓ Service Windows (démarrage auto au boot)
+     ✓ Compte admin créé
+
+  4. Vérifier que le serveur tourne :
+     → Ouvrir navigateur sur le PC serveur
+     → Aller sur : http://localhost:8000
+     → Doit afficher : {"message":"SIGMA API en ligne",...}
+
+
+ÉTAPE 4 : Installation sur les postes clients (PCs agents/caissiers)
+─────────────────────────────────────────────────────────────────────
+
+  1. Copier le dossier SIGMA_Livraison\APPLICATION\ sur chaque poste
+  2. Double-cliquer sur sigma.exe
+  3. Configurer l'adresse IP du serveur dans les paramètres de l'app
+     (ex: http://192.168.1.100:8000)
+
+  Trouver l'IP du PC serveur :
+  → Sur le PC serveur : Démarrer > cmd > taper "ipconfig"
+  → Relever l'"Adresse IPv4" (ex: 192.168.1.100)
+  → Cette IP ne doit pas changer — configurer une IP fixe si possible
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 2 — POUR LE CLIENT (utilisation quotidienne)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DÉMARRAGE NORMAL
+────────────────
+  Le serveur démarre AUTOMATIQUEMENT à chaque allumage du PC serveur.
+  Aucune action requise normalement.
+
+  Sur chaque poste de travail :
+  → Double-cliquer sur sigma.exe pour lancer l'application
+
+SI LE SERVEUR NE RÉPOND PAS
+─────────────────────────────
+  → Sur le PC serveur, double-cliquer sur : demarrer_serveur.bat
+  → Laisser cette fenêtre ouverte pendant toute la journée
+  → Ne pas la fermer
+
+VÉRIFIER QUE LE SERVEUR TOURNE
+────────────────────────────────
   → Ouvrir un navigateur sur le PC serveur
-  → Aller sur : http://localhost:8000
-  → Vous devez voir : {"message":"SIGMA API en ligne",...}
+  → Taper : http://localhost:8000
+  → Si vous voyez du texte JSON → le serveur est actif ✓
+  → Si page blanche ou erreur → relancer demarrer_serveur.bat
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-IDENTIFIANTS PAR DÉFAUT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SAUVEGARDE DES DONNÉES
+───────────────────────
+  Les données sont dans la base PostgreSQL sur le PC serveur.
+  Elles sont stockées dans : C:\Program Files\PostgreSQL\15\data\
+  Prévoir une sauvegarde régulière de ce dossier sur clé USB ou réseau.
 
-  Administrateur  : admin / Admin2024!
-  Base de données : sigma_user / SigmaMF2024!
-  PostgreSQL admin: postgres / sigma2024
 
-⚠️  Changer ces mots de passe après la première connexion !
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 3 — IDENTIFIANTS PAR DÉFAUT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EN CAS DE PROBLÈME
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Application SIGMA :
+    Utilisateur : admin
+    Mot de passe : Admin2024!
 
-  Consulter le fichier install\install.log
-  Contacter le support technique SIGMA
+  Base de données PostgreSQL :
+    Utilisateur app : sigma_user / SigmaMF2024!
+    Administrateur  : postgres / sigma2024
+
+  ⚠️  IMPORTANT : Changer le mot de passe admin après la première
+      connexion via Paramètres > Sécurité > Changer mot de passe.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 4 — EN CAS DE PROBLÈME
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. Consulter le fichier : install\install.log
+     (contient le détail de ce qui s'est passé pendant l'installation)
+
+  2. Vérifier que le service PostgreSQL tourne :
+     Démarrer > Rechercher "Services" > Chercher "postgresql-15"
+     → Doit être "En cours d'exécution"
+
+  3. Vérifier que le service SIGMA tourne :
+     Démarrer > Rechercher "Services" > Chercher "SIGMAMicroFinance"
+     → Doit être "En cours d'exécution"
+
+  4. Contacter le support technique SIGMA.
