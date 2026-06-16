@@ -1,50 +1,58 @@
-╔══════════════════════════════════════════════════════════╗
-║        SIGMA Micro-Finance — Guide d'installation        ║
-╚══════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════╗
+║         SIGMA Micro-Finance — Guide d'installation           ║
+╚══════════════════════════════════════════════════════════════╝
 
-POUR L'INSTALLATEUR (vous, le technicien) :
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+POUR VOUS (le technicien) — AVANT LA LIVRAISON
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-AVANT de remettre le PC au client, placez ces fichiers
-dans le dossier install\ :
+MÉTHODE RECOMMANDÉE (aucune installation Python chez le client) :
 
-  1. python-3.11.9-amd64.exe
-     → https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe
+  1. Sur VOTRE PC de développement, lancez :
+        backend\install\build_exe.bat
+     Cela génère sigma_server.exe (tout Python inclus dedans).
 
-  2. postgresql-15-windows-x64.exe
-     → https://get.enterprisedb.com/postgresql/postgresql-15.8-1-windows-x64.exe
+  2. Copiez ces fichiers dans le dossier install\ du client :
+        sigma_server.exe            (généré ci-dessus)
+        postgresql-15-windows-x64.exe  (si PostgreSQL absent)
+            → https://www.postgresql.org/download/windows/
 
-  3. nssm.exe  (optionnel — pour le service Windows automatique)
-     → https://nssm.cc/release/nssm-2.24.zip  (extraire nssm.exe 64-bit)
+  3. Livrez le dossier SIGMA entier sur le PC serveur du client.
 
-Ensuite, SUR LE PC SERVEUR DU CLIENT :
-  1. Clic droit sur "install_serveur.bat"
-  2. "Exécuter en tant qu'administrateur"
-  3. Attendre que l'installation se termine (~5 minutes)
-  4. L'application démarre automatiquement.
+  4. Sur le PC serveur :
+        Clic droit sur install_serveur.bat
+        "Exécuter en tant qu'administrateur"
+        → 5 minutes, tout s'installe seul.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-POUR LE CLIENT (utilisateur final) :
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+POUR LE CLIENT — UTILISATION QUOTIDIENNE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-DÉMARRAGE NORMAL (si le serveur ne se lance pas seul) :
-  → Double-cliquer sur "demarrer_serveur.bat"
-  → Laisser cette fenêtre ouverte pendant toute la journée
-  → L'icône verte dans la barre des tâches indique que c'est actif
+Le serveur démarre AUTOMATIQUEMENT à chaque allumage du PC.
+Aucune action requise normalement.
 
-ARRÊT DU SERVEUR :
-  → Fermer la fenêtre noire du serveur
-  → Ou Ctrl+C dans la fenêtre
+Si le serveur ne répond pas :
+  → Double-cliquer sur demarrer_serveur.bat
+  → Laisser la fenêtre ouverte
 
-EN CAS DE PROBLÈME :
-  → Consulter le fichier install\install.log
-  → Contacter le support technique
+Pour vérifier que le serveur tourne :
+  → Ouvrir un navigateur sur le PC serveur
+  → Aller sur : http://localhost:8000
+  → Vous devez voir : {"message":"SIGMA API en ligne",...}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-IDENTIFIANTS PAR DÉFAUT (à changer après installation) :
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IDENTIFIANTS PAR DÉFAUT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Administrateur : admin / Admin2024!
+  Administrateur  : admin / Admin2024!
   Base de données : sigma_user / SigmaMF2024!
+  PostgreSQL admin: postgres / sigma2024
 
-⚠️  IMPORTANT : Changer ces mots de passe après la première connexion !
+⚠️  Changer ces mots de passe après la première connexion !
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EN CAS DE PROBLÈME
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Consulter le fichier install\install.log
+  Contacter le support technique SIGMA
