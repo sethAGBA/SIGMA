@@ -75,7 +75,7 @@ class _MainLayoutState extends State<MainLayout> {
     const DelinquentLoansListPage(), // Index 10: Retards & relances
     const SavingsListPage(), // Index 11: Comptes épargne
     const GlobalSavingsTransactionsPage(), // Index 12: Transactions épargne
-    const ProductListPage(), // Index 13: Produits d'épargne
+    const ProductListPage(heroTag: 'fab-produits-epargne'), // Index 13: Produits d'épargne
     const CashLedgerPage(), // Index 14: Opérations de caisse
     const CashClosingListPage(), // Index 15: Clôture journalière
     const CashTransferListPage(), // Index 16: Transferts inter-agences
@@ -104,7 +104,7 @@ class _MainLayoutState extends State<MainLayout> {
     const AttestationsPage(), // Index 39: Attestations
     const InstitutionConfigurationPage(), // Index 40: Configuration Institution
     const GeneralConfigurationPage(), // Index 41: Configuration Comptable (Moved from 40)
-    const ProductListPage(), // Index 42: Produits financiers (Ex-42)
+    const ProductListPage(heroTag: 'fab-produits-financiers'), // Index 42: Produits financiers
     const UsersRightsPage(), // Index 43: Utilisateurs & droits
     const SecurityAuditPage(), // Index 44: Sauvegarde & sécurité
     const ServerConfigPage(),  // Index 45: Configuration serveur

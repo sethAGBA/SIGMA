@@ -7,7 +7,8 @@ import '../../core/theme/app_colors.dart';
 import '../../widgets/dialogs/product_form_dialog.dart';
 
 class ProductListPage extends StatefulWidget {
-  const ProductListPage({super.key});
+  final String heroTag;
+  const ProductListPage({super.key, this.heroTag = 'fab-produits'});
 
   @override
   State<ProductListPage> createState() => _ProductListPageState();
@@ -63,7 +64,7 @@ class _ProductListPageState extends State<ProductListPage>
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'fab-produits',
+        heroTag: widget.heroTag,
         onPressed: () => _showProductForm(),
         label: const Text('Nouveau Produit'),
         icon: const Icon(Icons.add_rounded),
