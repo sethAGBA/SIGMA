@@ -44,6 +44,7 @@ import 'documents/contract_templates_page.dart';
 import 'documents/attestations_page.dart';
 import 'configuration/users_rights_page.dart';
 import 'configuration/security_audit_page.dart';
+import 'configuration/server_config_page.dart';
 import '../core/theme/app_colors.dart';
 import '../core/services/auth_service.dart';
 import '../models/user_model.dart';
@@ -106,6 +107,7 @@ class _MainLayoutState extends State<MainLayout> {
     const ProductListPage(), // Index 42: Produits financiers (Ex-42)
     const UsersRightsPage(), // Index 43: Utilisateurs & droits
     const SecurityAuditPage(), // Index 44: Sauvegarde & sécurité
+    const ServerConfigPage(),  // Index 45: Configuration serveur
   ];
 
   final List<String> _titles = [
@@ -155,6 +157,7 @@ class _MainLayoutState extends State<MainLayout> {
     'Produits financiers',
     'Utilisateurs & droits',
     'Sauvegarde & sécurité',
+    'Serveur & Connexion',
   ];
 
   @override

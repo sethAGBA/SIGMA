@@ -380,6 +380,13 @@ class Sidebar extends StatelessWidget {
                   'Sauvegarde & sécurité',
                   isSubItem: true,
                 ),
+                _buildNavItem(
+                  context,
+                  45,
+                  Icons.dns_rounded,
+                  'Serveur & Connexion',
+                  isSubItem: true,
+                ),
 
                 const SizedBox(height: 16),
               ],
