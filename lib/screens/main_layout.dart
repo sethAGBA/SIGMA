@@ -45,6 +45,8 @@ import 'documents/attestations_page.dart';
 import 'configuration/users_rights_page.dart';
 import 'configuration/security_audit_page.dart';
 import '../core/theme/app_colors.dart';
+import '../core/services/auth_service.dart';
+import '../models/user_model.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -288,6 +290,10 @@ class _MainLayoutState extends State<MainLayout> {
 
   Widget _buildUserProfile(BuildContext context) {
     final theme = Theme.of(context);
+    final auth = AuthService();
+    final username = auth.currentUser?.username ?? 'Utilisateur';
+    final roleLabel = auth.currentUser?.role.label ?? '';
+    final initials = auth.userInitials;
 
     return Container(
       padding: const EdgeInsets.all(4),
@@ -303,7 +309,7 @@ class _MainLayoutState extends State<MainLayout> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'Jean KOUASSI',
+                username,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
@@ -311,7 +317,7 @@ class _MainLayoutState extends State<MainLayout> {
                 ),
               ),
               Text(
-                'Agent de Crédit (CI-04)',
+                roleLabel,
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
@@ -337,9 +343,9 @@ class _MainLayoutState extends State<MainLayout> {
             child: CircleAvatar(
               radius: 18,
               backgroundColor: theme.colorScheme.primary,
-              child: const Text(
-                'JK',
-                style: TextStyle(
+              child: Text(
+                initials,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,

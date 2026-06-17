@@ -7,6 +7,7 @@ import '../../widgets/dashboard/portfolio_chart.dart';
 import '../../widgets/dashboard/alerts_section.dart';
 import '../../widgets/dashboard/top_agents_section.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/auth_service.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -116,7 +117,7 @@ class _DashboardPageState extends State<DashboardPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '$greeting, Jean 👋',
+              '$greeting, ${AuthService().currentUser?.username ?? 'Utilisateur'} 👋',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,

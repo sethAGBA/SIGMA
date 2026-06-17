@@ -3,6 +3,9 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../core/services/theme_service.dart';
+import '../core/services/auth_service.dart';
+import '../models/user_model.dart';
+import '../screens/auth/login_page.dart';
 
 class Sidebar extends StatelessWidget {
   final int selectedIndex;
@@ -407,6 +410,14 @@ class Sidebar extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context) {
     final theme = Theme.of(context);
+    final auth = AuthService();
+    final user = auth.currentUser;
+
+    // Initiales et nom depuis la session
+    final initials = auth.userInitials;
+    final username = user?.username ?? 'Utilisateur';
+    final roleLabel = user?.role.label ?? '';
+
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
       child: Column(
@@ -471,9 +482,9 @@ class Sidebar extends StatelessWidget {
                 CircleAvatar(
                   radius: 16,
                   backgroundColor: theme.colorScheme.primary,
-                  child: const Text(
-                    'JK',
-                    style: TextStyle(
+                  child: Text(
+                    initials,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
@@ -486,19 +497,21 @@ class Sidebar extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Jean KOUASSI',
+                        username,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.onSurface,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        '📍 Agence Centrale',
+                        roleLabel,
                         style: TextStyle(
                           fontSize: 10,
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -640,7 +653,6 @@ class Sidebar extends StatelessWidget {
   }
 
   Widget _buildFooter(BuildContext context) {
-    // final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       child: Row(
@@ -651,6 +663,7 @@ class Sidebar extends StatelessWidget {
               Icons.logout_rounded,
               'Déconnexion',
               isDestructive: true,
+              onTap: () => _handleLogout(context),
             ),
           ),
         ],
@@ -658,18 +671,50 @@ class Sidebar extends StatelessWidget {
     );
   }
 
+  Future<void> _handleLogout(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Déconnexion'),
+        content: const Text('Voulez-vous vraiment vous déconnecter ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Se déconnecter'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await AuthService().logout();
+      if (context.mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginPage()),
+          (_) => false,
+        );
+      }
+    }
+  }
+
   Widget _buildFooterAction(
     BuildContext context,
     IconData icon,
     String label, {
     bool isDestructive = false,
+    VoidCallback? onTap,
   }) {
     final color = isDestructive
         ? AppColors.error
         : Theme.of(context).colorScheme.onSurfaceVariant;
 
     return InkWell(
-      onTap: () {},
+      onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),

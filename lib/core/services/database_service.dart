@@ -3682,4 +3682,53 @@ class DatabaseService {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
+
+  // --- AUTH METHODS ---
+
+  /// Authentifie un utilisateur par username + password.
+  /// V1 locale : comparaison directe (migration bcrypt via backend FastAPI prévue).
+  Future<UserAccount?> authenticateUser({
+    required String username,
+    required String password,
+  }) async {
+    final db = await database;
+
+    final maps = await db.query(
+      'utilisateurs_systeme',
+      where: 'username = ? AND is_active = 1',
+      whereArgs: [username],
+    );
+
+    if (maps.isEmpty) return null;
+
+    final user = UserAccount.fromMap(maps.first);
+    final storedHash = user.passwordHash;
+
+    // Comparaison directe du mot de passe (V1 — à remplacer par bcrypt)
+    if (storedHash == password) return user;
+
+    return null;
+  }
+
+  /// Récupère un utilisateur par son ID.
+  Future<UserAccount?> getUserById(String id) async {
+    final db = await database;
+    final maps = await db.query(
+      'utilisateurs_systeme',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (maps.isEmpty) return null;
+    return UserAccount.fromMap(maps.first);
+  }
+
+  /// Crée ou met à jour un compte utilisateur.
+  Future<void> upsertUserAccount(UserAccount user) async {
+    final db = await database;
+    await db.insert(
+      'utilisateurs_systeme',
+      user.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
 }
