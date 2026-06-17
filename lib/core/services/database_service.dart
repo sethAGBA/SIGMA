@@ -54,12 +54,17 @@ class DatabaseService {
     final documentsDirectory = await getApplicationDocumentsDirectory();
     final path = join(documentsDirectory.path, 'sigma_microfinance.db');
 
-    return await openDatabase(
+    final db = await openDatabase(
       path,
       version: _version,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
+
+    // S'assurer qu'un admin existe même sur une base déjà créée
+    await _seedDefaultAdmin(db);
+
+    return db;
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -594,8 +599,8 @@ class DatabaseService {
     await ChartOfAccountsService().insertFullChartOfAccounts(db);
     await _createGarantiesTable(db);
     await _createRecoveryActionsTable(db);
-
     await _seedInitialTemplates(db);
+    await _seedDefaultAdmin(db);
   }
 
   Future<void> _seedInitialTemplates(Database db) async {
@@ -3684,6 +3689,38 @@ class DatabaseService {
   }
 
   // --- AUTH METHODS ---
+
+  /// Crée un compte admin par défaut si aucun utilisateur n'existe.
+  /// Identifiants : admin / Admin2024!
+  Future<void> _seedDefaultAdmin(Database db) async {
+    final existing = await db.query('utilisateurs_systeme', limit: 1);
+    if (existing.isNotEmpty) return; // Déjà des utilisateurs
+
+    // Créer un agent admin
+    await db.insert('agents', {
+      'id': 'agent-admin-001',
+      'first_name': 'Administrateur',
+      'last_name': 'SIGMA',
+      'email': 'admin@sigma.local',
+      'phone': '',
+      'role': 'superAdmin',
+      'agency_id': '',
+      'is_active': 1,
+      'hired_date': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+    // Créer le compte admin avec mot de passe en clair (V1 locale)
+    await db.insert('utilisateurs_systeme', {
+      'id': 'user-admin-001',
+      'agent_id': 'agent-admin-001',
+      'username': 'admin',
+      'password_hash': 'Admin2024!', // Comparaison directe en V1
+      'role': 'superAdmin',
+      'is_active': 1,
+      'created_at': DateTime.now().toIso8601String(),
+      'permissions': 'all',
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
 
   /// Authentifie un utilisateur par username + password.
   /// V1 locale : comparaison directe (migration bcrypt via backend FastAPI prévue).
