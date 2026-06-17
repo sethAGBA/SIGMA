@@ -5,6 +5,8 @@ import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'core/theme/app_colors.dart';
 import 'core/services/auth_service.dart';
+import 'core/services/api_service.dart';
+import 'core/services/sync_service.dart';
 import 'screens/auth/login_page.dart';
 import 'screens/main_layout.dart';
 import 'core/services/theme_service.dart';
@@ -24,6 +26,9 @@ void main() async {
   // Vérifier si une session existe déjà (stay-logged-in)
   final authService = AuthService();
   await authService.init();
+
+  // Tenter de vider la file des opérations offline en attente
+  SyncService().flushPendingOperations();
 
   runApp(MyApp(isLoggedIn: authService.isLoggedIn));
 }

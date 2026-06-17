@@ -9,6 +9,7 @@ import '../../widgets/dashboard/top_agents_section.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/sync_service.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -34,39 +35,47 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _loadData() async {
     setState(() => isLoading = true);
     try {
-      // 1. OFFLINE-FIRST : afficher immédiatement les données locales (SQLite)
-      final localData = await DatabaseService().getHomeDashboardData();
+      final serverAvailable = await ApiService().isServerAvailable();
+      if (mounted) setState(() => _isOnline = serverAvailable);
+
+      HomeDashboardData data;
+
+      if (serverAvailable) {
+        // CONNECTÉ → données du serveur (agrégation de tous les postes)
+        final apiData = await _loadFromApi();
+        if (apiData != null) {
+          // Enrichir avec les données locales (graphique + agents)
+          final localData = await DatabaseService().getHomeDashboardData();
+          data = HomeDashboardData(
+            kpis: apiData.kpis,
+            portfolioData: localData.portfolioData,
+            alerts: [...apiData.alerts, ...localData.alerts]
+                .toSet()
+                .toList(),
+            topAgents: localData.topAgents,
+          );
+        } else {
+          // API dispo mais réponse vide → fallback local
+          data = await DatabaseService().getHomeDashboardData();
+        }
+      } else {
+        // OFFLINE → cache local uniquement
+        data = await DatabaseService().getHomeDashboardData();
+      }
+
       if (mounted) {
         setState(() {
-          kpis = localData.kpis;
-          portfolioData = localData.portfolioData;
-          alerts = localData.alerts;
-          topAgents = localData.topAgents;
+          kpis = data.kpis;
+          portfolioData = data.portfolioData;
+          alerts = data.alerts;
+          topAgents = data.topAgents;
           isLoading = false;
-          _isOnline = false;
         });
       }
 
-      // 2. Vérifier la disponibilité du serveur
-      final serverAvailable = await ApiService().isServerAvailable();
-      if (!mounted) return;
-      setState(() => _isOnline = serverAvailable);
-
-      // 3. Si serveur disponible, enrichir les KPIs avec les données consolidées
+      // Tenter de vider la file de sync en arrière-plan
       if (serverAvailable) {
-        final apiData = await _loadFromApi();
-        if (apiData != null && mounted) {
-          setState(() {
-            // KPIs depuis le serveur (agrégation centralisée de tous les postes)
-            kpis = apiData.kpis;
-            // Alertes : combiner locale + serveur
-            final allAlerts = [...localData.alerts, ...apiData.alerts];
-            alerts = allAlerts.toSet().toList(); // dédoublonner
-            // Graphique et agents : garder local (plus riche)
-            portfolioData = localData.portfolioData;
-            topAgents = localData.topAgents;
-          });
-        }
+        SyncService().flushPendingOperations();
       }
     } catch (e) {
       if (mounted) {
