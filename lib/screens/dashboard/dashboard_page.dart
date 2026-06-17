@@ -33,23 +33,30 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _loadData() async {
     setState(() => isLoading = true);
     try {
-      HomeDashboardData data;
-
-      // Tenter l'API FastAPI si disponible
-      if (await ApiService().isServerAvailable()) {
-        data = await _loadFromApi() ?? await DatabaseService().getHomeDashboardData();
-      } else {
-        data = await DatabaseService().getHomeDashboardData();
-      }
-
+      // 1. Afficher immédiatement les données locales (SQLite)
+      final localData = await DatabaseService().getHomeDashboardData();
       if (mounted) {
         setState(() {
-          kpis = data.kpis;
-          portfolioData = data.portfolioData;
-          alerts = data.alerts;
-          topAgents = data.topAgents;
+          kpis = localData.kpis;
+          portfolioData = localData.portfolioData;
+          alerts = localData.alerts;
+          topAgents = localData.topAgents;
           isLoading = false;
         });
+      }
+
+      // 2. Si serveur disponible, enrichir en arrière-plan
+      if (await ApiService().isServerAvailable()) {
+        final apiData = await _loadFromApi();
+        if (apiData != null && mounted) {
+          setState(() {
+            kpis = apiData.kpis;
+            alerts = apiData.alerts.isNotEmpty ? apiData.alerts : localData.alerts;
+            // Garder le graphique local (plus riche)
+            portfolioData = localData.portfolioData;
+            topAgents = localData.topAgents;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
