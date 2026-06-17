@@ -8,6 +8,7 @@ import '../../widgets/dashboard/alerts_section.dart';
 import '../../widgets/dashboard/top_agents_section.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/api_service.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -32,7 +33,15 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _loadData() async {
     setState(() => isLoading = true);
     try {
-      final data = await DatabaseService().getHomeDashboardData();
+      HomeDashboardData data;
+
+      // Tenter l'API FastAPI si disponible
+      if (await ApiService().isServerAvailable()) {
+        data = await _loadFromApi() ?? await DatabaseService().getHomeDashboardData();
+      } else {
+        data = await DatabaseService().getHomeDashboardData();
+      }
+
       if (mounted) {
         setState(() {
           kpis = data.kpis;
@@ -45,11 +54,78 @@ class _DashboardPageState extends State<DashboardPage> {
     } catch (e) {
       if (mounted) {
         setState(() => isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Erreur de chargement: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur de chargement: $e')),
+        );
       }
     }
+  }
+
+  Future<HomeDashboardData?> _loadFromApi() async {
+    final response = await ApiService().get('/reporting/dashboard');
+    final data = ApiService.decodeResponse(response);
+    if (data == null) return null;
+
+    // Construire les KPIs depuis la réponse API
+    final kpis = <DashboardKPI>[
+      DashboardKPI(
+        title: 'Clients Actifs',
+        value: '${data['clients_actifs'] ?? 0}',
+        variation: '+0',
+        isPositive: true,
+        icon: Icons.people_rounded,
+        color: const Color(0xFF3B82F6),
+      ),
+      DashboardKPI(
+        title: 'Encours Total',
+        value: _formatAmount((data['encours_total'] as num?)?.toDouble() ?? 0),
+        variation: '+0%',
+        isPositive: true,
+        icon: Icons.account_balance_wallet_rounded,
+        color: const Color(0xFF10B981),
+      ),
+      DashboardKPI(
+        title: 'PAR > 30j',
+        value: '${data['taux_remboursement'] ?? 0}%',
+        variation: 'Normal',
+        isPositive: true,
+        icon: Icons.trending_down_rounded,
+        color: const Color(0xFFF59E0B),
+      ),
+      DashboardKPI(
+        title: 'Prêts Actifs',
+        value: '${data['prets_actifs'] ?? 0}',
+        variation: '0',
+        isPositive: true,
+        icon: Icons.payments_rounded,
+        color: const Color(0xFF8B5CF6),
+      ),
+    ];
+
+    // Alertes
+    final alerts = <AlertItem>[];
+    final pretsEnRetard = (data['prets_en_retard'] as num?)?.toInt() ?? 0;
+    if (pretsEnRetard > 0) {
+      alerts.add(AlertItem(
+        title: '$pretsEnRetard prêts en retard',
+        description: 'Actions de recouvrement requises',
+        level: AlertLevel.warning,
+        icon: Icons.warning_rounded,
+      ));
+    }
+
+    return HomeDashboardData(
+      kpis: kpis,
+      portfolioData: [],
+      alerts: alerts,
+      topAgents: [],
+    );
+  }
+
+  String _formatAmount(double amount) {
+    if (amount >= 1000000) return '${(amount / 1000000).toStringAsFixed(1)}M';
+    if (amount >= 1000) return '${(amount / 1000).toStringAsFixed(0)}k';
+    return amount.toStringAsFixed(0);
   }
 
   @override

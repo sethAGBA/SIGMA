@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/client_api_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/client_model.dart';
 import '../../models/groupe_solidaire_model.dart';
@@ -255,7 +256,7 @@ class _GroupListPageState extends State<GroupListPage> {
   Widget _buildResponsableInfo(GroupeSolidaire group) {
     return FutureBuilder<Client?>(
       future: group.responsableId != null
-          ? DatabaseService().getClientById(group.responsableId!)
+          ? ClientApiService().getClientById(group.responsableId!)
           : Future.value(null),
       builder: (context, snapshot) {
         final responsableName = snapshot.data != null
@@ -285,7 +286,7 @@ class _GroupListPageState extends State<GroupListPage> {
 
   Widget _buildGroupMetrics(GroupeSolidaire group) {
     return FutureBuilder<List<Client>>(
-      future: DatabaseService().getGroupMembers(group.id!),
+      future: ClientApiService().getGroupMembers(group.id!),
       builder: (context, snapshot) {
         final memberCount = snapshot.data?.length ?? 0;
         return Row(

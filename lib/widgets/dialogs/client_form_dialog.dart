@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math';
 import '../../core/services/database_service.dart';
+import '../../core/services/client_api_service.dart';
 import '../../core/utils/dialog_utils.dart';
 import '../../models/client_model.dart';
 
@@ -243,7 +244,7 @@ class _ClientFormDialogState extends State<ClientFormDialog> {
       );
 
       // Vérification des doublons
-      final isDuplicate = await DatabaseService().isDuplicateClient(
+      final isDuplicate = await ClientApiService().isDuplicate(
         telephone: _telController.text.trim(),
         numeroCNI: _numeroCNIController.text.trim(),
         excludeId: widget.client?.id,
@@ -361,9 +362,9 @@ class _ClientFormDialogState extends State<ClientFormDialog> {
       );
 
       if (_isEditing) {
-        await DatabaseService().updateClient(clientData);
+        await ClientApiService().updateClient(clientData);
       } else {
-        await DatabaseService().insertClient(clientData);
+        await ClientApiService().insertClient(clientData);
       }
 
       if (mounted) {

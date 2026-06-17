@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/client_api_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/dialog_utils.dart';
 import '../../models/client_model.dart';
@@ -34,7 +35,7 @@ class _ClientListPageState extends State<ClientListPage> {
 
   void _refreshClients() {
     setState(() {
-      _clientsFuture = DatabaseService().searchClients(
+      _clientsFuture = ClientApiService().searchClients(
         query: _searchController.text,
         status: _selectedStatus,
         riskLevel: _selectedRisk?.label,
