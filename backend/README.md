@@ -139,7 +139,16 @@ Cela crée toutes les tables et le compte admin par défaut (`admin` / `Admin202
 
 ### Étape 5 — Démarrer le serveur
 
+⚠️ **Important** : la commande doit être lancée depuis le dossier `backend\`, pas depuis la racine du projet.
+
 ```bash
+# S'assurer d'être dans le bon dossier
+cd c:\Users\LEGION\Desktop\Project\SIGMA\backend
+
+# Activer le venv si pas encore fait
+venv\Scripts\activate
+
+# Démarrer le serveur
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -244,3 +253,10 @@ backend/
 | `daily_penalties` | 00h05 chaque jour | Calcule les pénalités sur échéances en retard |
 | `monthly_interests` | 01h00 le 1er du mois | Capitalise les intérêts sur comptes épargne |
 | `nightly_scoring` | 02h00 chaque jour | Recalcule les scores crédit clients |
+
+#  
+
+  Invoke-RestMethod -Uri "http://localhost:8000/api/v1/auth/login" -Method POST -ContentType "application/json" -Body '{"username":"admin","password":"Admin2024!"}'
+
+
+  cd "c:\Users\LEGION\Desktop\Project\SIGMA" ; Start-Sleep -Seconds 4; Invoke-RestMethod -Uri "http://localhost:8000/health" -Method GET
