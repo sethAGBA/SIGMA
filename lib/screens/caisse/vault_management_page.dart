@@ -1,4 +1,4 @@
-// lib/screens/caisse/vault_management_page.dart
+﻿// lib/screens/caisse/vault_management_page.dart
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -89,6 +89,7 @@ class _VaultManagementPageState extends State<VaultManagementPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-vault',
         onPressed: () async {
           final result = await showDialog<bool>(
             context: context,

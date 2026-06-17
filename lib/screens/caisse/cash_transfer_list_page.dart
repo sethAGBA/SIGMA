@@ -1,4 +1,4 @@
-// lib/screens/caisse/cash_transfer_list_page.dart
+﻿// lib/screens/caisse/cash_transfer_list_page.dart
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -65,6 +65,7 @@ class _CashTransferListPageState extends State<CashTransferListPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-transfers',
         onPressed: () async {
           final result = await showDialog<bool>(
             context: context,

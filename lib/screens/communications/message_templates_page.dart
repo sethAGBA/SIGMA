@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/database_service.dart';
 import '../../models/communication_models.dart';
@@ -174,6 +174,7 @@ class _MessageTemplatesPageState extends State<MessageTemplatesPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-templates',
         onPressed: () => _showTemplateForm(),
         label: const Text('Nouveau Modèle'),
         icon: const Icon(Icons.add),

@@ -1,4 +1,4 @@
-// lib/screens/epargne/savings_list_page.dart
+﻿// lib/screens/epargne/savings_list_page.dart
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -59,6 +59,7 @@ class _SavingsListPageState extends State<SavingsListPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-epargne',
         onPressed: () async {
           final result = await showDialog<bool>(
             context: context,

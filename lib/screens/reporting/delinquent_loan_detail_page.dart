@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/services/database_service.dart';
 import '../../models/delinquent_loan_details_model.dart';
@@ -93,6 +93,7 @@ class _DelinquentLoanDetailPageState extends State<DelinquentLoanDetailPage> {
         ),
         floatingActionButton: _details != null
             ? FloatingActionButton.extended(
+        heroTag: 'fab-delinquent',
                 onPressed: () async {
                   await showDialog(
                     context: context,

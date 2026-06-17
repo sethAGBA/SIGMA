@@ -1,4 +1,4 @@
-// lib/screens/caisse/cash_ledger_page.dart
+﻿// lib/screens/caisse/cash_ledger_page.dart
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -75,6 +75,7 @@ class _CashLedgerPageState extends State<CashLedgerPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-caisse',
         onPressed: () async {
           final result = await showDialog<bool>(
             context: context,

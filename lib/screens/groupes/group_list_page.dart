@@ -1,4 +1,4 @@
-// lib/screens/groupes/group_list_page.dart
+﻿// lib/screens/groupes/group_list_page.dart
 
 import 'package:flutter/material.dart';
 import '../../core/services/database_service.dart';
@@ -89,6 +89,7 @@ class _GroupListPageState extends State<GroupListPage> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-groupes',
         onPressed: () => _showGroupForm(),
         icon: const Icon(Icons.group_add_rounded),
         label: const Text('Nouveau Groupe'),

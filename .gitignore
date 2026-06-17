@@ -43,3 +43,27 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# ── Backend Python ────────────────────────────────────────────
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.env
+backend/app/**/__pycache__/
+
+# ── Fichiers lourds d'installation (installateurs binaires) ──
+# Ces fichiers sont trop lourds pour git (>100MB).
+# Les télécharger depuis les sources officielles (voir README).
+backend/install/*.exe
+backend/install/*.msi
+backend/install/*.zip
+backend/install/nssm-2.24/
+backend/install/sigma_server.exe
+
+# ── Base de données locale ────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Fichiers de build Flutter générés ────────────────────────
+/build/

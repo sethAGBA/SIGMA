@@ -1,4 +1,4 @@
-// lib/screens/produits/product_list_page.dart
+﻿// lib/screens/produits/product_list_page.dart
 
 import 'package:flutter/material.dart';
 import '../../core/services/database_service.dart';
@@ -63,6 +63,7 @@ class _ProductListPageState extends State<ProductListPage>
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-produits',
         onPressed: () => _showProductForm(),
         label: const Text('Nouveau Produit'),
         icon: const Icon(Icons.add_rounded),

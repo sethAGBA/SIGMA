@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/database_service.dart';
 import '../../models/user_model.dart';
@@ -244,6 +244,7 @@ class _UsersRightsPageState extends State<UsersRightsPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-users',
         onPressed: () => _showUserForm(),
         label: const Text('Ajouter un Utilisateur'),
         icon: const Icon(Icons.person_add_rounded),

@@ -1,4 +1,4 @@
-// lib/screens/prets/loan_request_list_page.dart
+﻿// lib/screens/prets/loan_request_list_page.dart
 
 import 'package:flutter/material.dart';
 import '../../core/services/database_service.dart';
@@ -56,6 +56,7 @@ class _LoanRequestListPageState extends State<LoanRequestListPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-prets',
         onPressed: () => _showNewRequestDialog(),
         label: const Text('Nouveau Dossier'),
         icon: const Icon(Icons.add_task_rounded),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/agency_model.dart';
 import '../../widgets/dialogs/agency_detail_dialog.dart';
@@ -65,6 +65,7 @@ class _AgencyListPageState extends State<AgencyListPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-agencies',
         onPressed: () => _openAgencyForm(),
         label: const Text('Nouvelle Agence'),
         icon: const Icon(Icons.add),
