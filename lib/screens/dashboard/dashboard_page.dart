@@ -23,6 +23,7 @@ class _DashboardPageState extends State<DashboardPage> {
   List<AlertItem> alerts = [];
   List<AgentPerformance> topAgents = [];
   bool isLoading = true;
+  bool _isOnline = false; // indicateur mode serveur
 
   @override
   void initState() {
@@ -33,7 +34,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _loadData() async {
     setState(() => isLoading = true);
     try {
-      // 1. Afficher immédiatement les données locales (SQLite)
+      // 1. OFFLINE-FIRST : afficher immédiatement les données locales (SQLite)
       final localData = await DatabaseService().getHomeDashboardData();
       if (mounted) {
         setState(() {
@@ -42,17 +43,26 @@ class _DashboardPageState extends State<DashboardPage> {
           alerts = localData.alerts;
           topAgents = localData.topAgents;
           isLoading = false;
+          _isOnline = false;
         });
       }
 
-      // 2. Si serveur disponible, enrichir en arrière-plan
-      if (await ApiService().isServerAvailable()) {
+      // 2. Vérifier la disponibilité du serveur
+      final serverAvailable = await ApiService().isServerAvailable();
+      if (!mounted) return;
+      setState(() => _isOnline = serverAvailable);
+
+      // 3. Si serveur disponible, enrichir les KPIs avec les données consolidées
+      if (serverAvailable) {
         final apiData = await _loadFromApi();
         if (apiData != null && mounted) {
           setState(() {
+            // KPIs depuis le serveur (agrégation centralisée de tous les postes)
             kpis = apiData.kpis;
-            alerts = apiData.alerts.isNotEmpty ? apiData.alerts : localData.alerts;
-            // Garder le graphique local (plus riche)
+            // Alertes : combiner locale + serveur
+            final allAlerts = [...localData.alerts, ...apiData.alerts];
+            alerts = allAlerts.toSet().toList(); // dédoublonner
+            // Graphique et agents : garder local (plus riche)
             portfolioData = localData.portfolioData;
             topAgents = localData.topAgents;
           });
@@ -218,6 +228,46 @@ class _DashboardPageState extends State<DashboardPage> {
           ],
         ),
         const Spacer(),
+        // Indicateur mode online/offline
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: (_isOnline
+                    ? const Color(0xFF10B981)
+                    : Colors.orange)
+                .withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: (_isOnline
+                      ? const Color(0xFF10B981)
+                      : Colors.orange)
+                  .withOpacity(0.3),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: _isOnline ? const Color(0xFF10B981) : Colors.orange,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _isOnline ? 'Serveur connecté' : 'Mode hors ligne',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: _isOnline ? const Color(0xFF10B981) : Colors.orange,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
