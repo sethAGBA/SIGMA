@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/utils/audit_field_utils.dart';
 import '../../models/cash_operation_model.dart';
 
 class CashTransferDialog extends StatefulWidget {
@@ -236,7 +238,7 @@ class _CashTransferDialogState extends State<CashTransferDialog> {
                   ? 'Approvisionnement caisse'
                   : 'Dégagement caisse')
             : _descriptionController.text,
-        'agent_operation': 'Admin',
+        'agent_operation': auditFieldValue(AuthService().currentUsername),
         'date_operation': DateTime.now().toIso8601String(),
       });
 

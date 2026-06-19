@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/services/accounting_service.dart';
+import '../../core/services/auth_service.dart';
 import '../../models/accounting_account_model.dart';
 import '../../models/ecriture_comptable_model.dart';
 import '../../models/journal_model.dart';
@@ -136,7 +137,7 @@ class _SaisieComptablePageState extends State<SaisieComptablePage> {
               const SizedBox(width: 16),
               Expanded(
                 child: TextFormField(
-                  initialValue: 'Admin', // TODO: User name
+                  initialValue: AuthService().currentUsername,
                   readOnly: true,
                   decoration: const InputDecoration(
                     labelText: 'Agent de saisie',
@@ -521,7 +522,9 @@ class _SaisieComptablePageState extends State<SaisieComptablePage> {
         journalCode: _selectedJournal!.code,
         numeroPiece: _refController.text,
         libelle: _libelleGlobalController.text,
-        agentSaisie: 'Admin', // TODO: Get logged user
+        agentSaisie: AuthService().currentUsername.isNotEmpty
+            ? AuthService().currentUsername
+            : 'Inconnu',
         dateSaisie: DateTime.now(),
         statut: 'VALIDE',
       );

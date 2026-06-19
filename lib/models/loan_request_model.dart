@@ -46,6 +46,7 @@ class LoanRequest {
   final double totalARembourser;
   final double coutTotalCredit;
   final double teg; // Taux Effectif Global
+  final int moisDiffereCapital;
 
   // Analyse financière
   final double revenusMensuels;
@@ -98,6 +99,7 @@ class LoanRequest {
     required this.totalARembourser,
     required this.coutTotalCredit,
     required this.teg,
+    this.moisDiffereCapital = 0,
     this.revenusMensuels = 0,
     this.chargesMensuelles = 0,
     this.capaciteRemboursement = 0,
@@ -138,6 +140,7 @@ class LoanRequest {
       'total_a_rembourser': totalARembourser,
       'cout_total_credit': coutTotalCredit,
       'teg': teg,
+      'mois_differe_capital': moisDiffereCapital,
       'revenus_mensuels': revenusMensuels,
       'charges_mensuelles': chargesMensuelles,
       'capacite_remboursement': capaciteRemboursement,
@@ -183,6 +186,7 @@ class LoanRequest {
       totalARembourser: map['total_a_rembourser'],
       coutTotalCredit: map['cout_total_credit'],
       teg: map['teg'],
+      moisDiffereCapital: map['mois_differe_capital'] ?? 0,
       revenusMensuels: map['revenus_mensuels'] ?? 0,
       chargesMensuelles: map['charges_mensuelles'] ?? 0,
       capaciteRemboursement: map['capacite_remboursement'] ?? 0,

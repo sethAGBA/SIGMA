@@ -28,6 +28,7 @@ class Loan {
   final LoanStatus statut;
   final String? agentGestionnaire;
   final String? agenceGestion;
+  final int? moisDiffereCapital;
 
   // Objets joints (chargés à la demande)
   final Client? client;
@@ -47,6 +48,7 @@ class Loan {
     required this.statut,
     this.agentGestionnaire,
     this.agenceGestion,
+    this.moisDiffereCapital = 0,
     this.client,
     this.produit,
   });
@@ -66,6 +68,7 @@ class Loan {
       'statut': statut.name,
       'agent_gestionnaire': agentGestionnaire,
       'agence_gestion': agenceGestion,
+      'mois_differe_capital': moisDiffereCapital ?? 0,
     };
   }
 
@@ -93,6 +96,7 @@ class Loan {
       ),
       agentGestionnaire: map['agent_gestionnaire'],
       agenceGestion: map['agence_gestion'],
+      moisDiffereCapital: map['mois_differe_capital'] ?? 0,
       client: client,
       produit: produit,
     );

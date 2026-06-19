@@ -6,6 +6,8 @@ import '../../models/loan_request_model.dart';
 import '../../models/loan_model.dart';
 import '../../models/repayment_schedule_model.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/loan_calculator.dart';
+import '../../widgets/dialogs/pin_validation_dialog.dart';
 
 class LoanRequestDetailDialog extends StatefulWidget {
   final LoanRequest request;
@@ -734,7 +736,30 @@ class _LoanRequestDetailDialogState extends State<LoanRequestDetailDialog>
   String _formatDate(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
-  void _showDeblocageDialog() {
+  void _showDeblocageDialog() async {
+    final seuil = await DatabaseService().getSeuilValidationPinFCFA();
+    if (widget.request.montantDemande > seuil) {
+      if (!mounted) return;
+      final pinOk = await showDialog<bool>(
+        context: context,
+        builder: (_) => const PinValidationDialog(),
+      );
+      if (pinOk != true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Déblocage annulé — validation superviseur requise.',
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -812,28 +837,33 @@ class _LoanRequestDetailDialogState extends State<LoanRequestDetailDialog>
         statut: LoanStatus.aJour,
         agentGestionnaire: widget.request.client?.agentAffecte,
         agenceGestion: widget.request.client?.agence,
+        moisDiffereCapital: widget.request.moisDiffereCapital,
       );
 
       final loanId = await db.insertLoan(loan);
 
-      // 2. Générer l'échéancier
-      // Calcul simplifié pour la démonstration (Amortissement constant)
-      final capitalMensuel =
-          widget.request.montantDemande / widget.request.dureeMois;
       final tauxAnnuel = widget.request.produit?.tauxInteret ?? 0;
-      final interetMensuel =
-          (widget.request.montantDemande * (tauxAnnuel / 100)) / 12;
+      final echeancier = LoanCalculator.calculerEcheancierAvecDiffere(
+        montant: widget.request.montantDemande,
+        duree: widget.request.dureeMois,
+        tauxAnnuel: tauxAnnuel,
+        moisDiffere: widget.request.moisDiffereCapital,
+      );
 
-      for (int i = 1; i <= widget.request.dureeMois; i++) {
-        final datePrevue = DateTime.now().add(Duration(days: 30 * i));
+      double capitalRestant = widget.request.montantDemande;
+      for (int i = 0; i < echeancier.length; i++) {
+        final row = echeancier[i];
+        final capitalDu = row['capital_du'] ?? 0;
+        capitalRestant -= capitalDu;
+        final datePrevue = DateTime.now().add(Duration(days: 30 * (i + 1)));
         final schedule = RepaymentSchedule(
           pretId: loanId,
-          numeroEcheance: i,
+          numeroEcheance: i + 1,
           datePrevue: datePrevue,
-          capitalDu: capitalMensuel,
-          interetsDus: interetMensuel,
-          totalDu: capitalMensuel + interetMensuel,
-          capitalRestant: widget.request.montantDemande - (capitalMensuel * i),
+          capitalDu: capitalDu,
+          interetsDus: row['interets_dus'] ?? 0,
+          totalDu: row['total_du'] ?? 0,
+          capitalRestant: capitalRestant.clamp(0, double.infinity),
           statut: RepaymentStatus.enAttente,
         );
         await db.insertRepaymentSchedule(schedule);

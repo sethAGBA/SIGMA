@@ -22,6 +22,8 @@ class SavingsAccount {
   final SavingsAccountStatus statut;
   final DateTime dateOuverture;
   final double? tauxInteretApplique;
+  final DateTime? dateEcheanceTerme;
+  final double? tauxPenaliteRuptureAnt;
 
   // Relations optionnelles (chargées via join)
   final Client? client;
@@ -37,6 +39,8 @@ class SavingsAccount {
     required this.statut,
     required this.dateOuverture,
     this.tauxInteretApplique,
+    this.dateEcheanceTerme,
+    this.tauxPenaliteRuptureAnt,
     this.client,
     this.produit,
   });
@@ -52,6 +56,8 @@ class SavingsAccount {
       'statut': statut.name,
       'date_ouverture': dateOuverture.toIso8601String(),
       'taux_interet_applique': tauxInteretApplique,
+      'date_echeance_terme': dateEcheanceTerme?.toIso8601String(),
+      'taux_penalite_rupture_ant': tauxPenaliteRuptureAnt,
     };
   }
 
@@ -74,6 +80,12 @@ class SavingsAccount {
       dateOuverture: DateTime.parse(map['date_ouverture']),
       tauxInteretApplique: map['taux_interet_applique'] != null
           ? (map['taux_interet_applique'] as num).toDouble()
+          : null,
+      dateEcheanceTerme: map['date_echeance_terme'] != null
+          ? DateTime.parse(map['date_echeance_terme'])
+          : null,
+      tauxPenaliteRuptureAnt: map['taux_penalite_rupture_ant'] != null
+          ? (map['taux_penalite_rupture_ant'] as num).toDouble()
           : null,
       client: client,
       produit: produit,

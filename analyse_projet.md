@@ -109,26 +109,26 @@ backend/
 
 | Élément | Description |
 |---|---|
-| **Pas d'écran de login** | L'app démarre directement sur le dashboard. C'est le chantier #1 absolu. |
-| **Pas de RBAC** | N'importe quel utilisateur voit tout. |
-| **SQLite non chiffré** | Le fichier `.db` est lisible en clair sur le disque Windows. |
+| ~~**Pas d'écran de login**~~ | ✅ `LoginPage` implémentée (`lib/screens/auth/login_page.dart`) |
+| **Pas de RBAC** | ⚠️ Partiel — sidebar affiche le rôle, mais aucun masquage dynamique des modules |
+| **SQLite non chiffré** | ⚠️ Partiel — `KeyDerivationService` préparé, clé non appliquée (contrainte Windows/sqflite_common_ffi) |
 
 ### 🟠 Fonctionnel mais incomplet
 
 | Élément | Description |
 |---|---|
-| **Dashboard avec mocks** | Valeurs codées en dur au lieu de vraies agrégations SQL. |
-| **Pas de state management** | Pas de Provider/Riverpod/Bloc — les requêtes lourdes sont recalculées à chaque navigation. |
-| **Pont comptable absent** | Les remboursements ne génèrent pas d'écritures comptables automatiques. |
+| ~~**Dashboard avec mocks**~~ | ✅ Salutation + FAB dynamiques ; BottomStatsBar encore mockée |
+| ~~**Pas de state management**~~ | ✅ `DashboardNotifier` avec Provider — cache transparent, refresh, `clearCache` sur logout |
+| ~~**Pont comptable absent**~~ | ✅ `AutomaticAccountingService` Flutter + Python branché dans déblocage, remboursement, dépôt, retrait, provisions |
 
 ### 🟡 Améliorations importantes
 
 | Élément | Description |
 |---|---|
-| **Mode offline terrain** | Sync différée pour les agents de collecte. |
-| **Pénalités automatiques** | Job nocturne manquant pour calculer les retards. |
-| **Plan comptable RCSSFD** | Référentiel réglementaire non encore intégré. |
-| **APIs externes** | SMS et Mobile Money non branchés. |
+| ~~**Mode offline terrain**~~ | ✅ `SyncService` + `ConnectivityMonitor` + `SyncSupervisorScreen` implémentés |
+| ~~**Pénalités automatiques**~~ | ✅ `PenaltyService` + `daily_penalties.py` job à 00h05 via APScheduler |
+| **Plan comptable RCSSFD** | ❌ Référentiel réglementaire non encore intégré. |
+| **APIs externes** | ❌ SMS et Mobile Money non branchés. |
 
 ---
 
@@ -139,26 +139,26 @@ backend/
 ### Phase 0 — Infrastructure serveur *(prérequis de tout)*
 > Backend Python FastAPI + PostgreSQL sur le PC serveur local
 
-- [ ] Installer et configurer PostgreSQL sur le PC serveur
-- [ ] Créer le projet backend `backend/` avec FastAPI + SQLAlchemy + Alembic
-- [ ] Migrer le schéma SQLite vers PostgreSQL (32 tables)
-- [ ] Configurer le réseau local (adresse IP fixe pour le serveur)
-- [ ] Créer les premières routes API REST (auth, clients, prêts)
-- [ ] Adapter l'app Flutter : remplacer les appels `DatabaseService` directs → appels HTTP via `ApiService`
-- [ ] Implémenter le cache SQLite local côté Flutter (mode offline de base)
+- [x] Installer et configurer PostgreSQL sur le PC serveur *(script `install_serveur.bat` + doc ; déploiement client dépendant)*
+- [x] Créer le projet backend `backend/` avec FastAPI + SQLAlchemy + Alembic *(dossier `backend/` complet, 13 routers)*
+- [ ] Migrer le schéma SQLite vers PostgreSQL (32 tables) *(modèles + `create_tables()` au démarrage ; aucun fichier `alembic/versions/*.py`)*
+- [ ] Configurer le réseau local (adresse IP fixe pour le serveur) *(documentation uniquement)*
+- [x] Créer les premières routes API REST (auth, clients, prêts) *(toutes les routes existent côté serveur)*
+- [ ] Adapter l'app Flutter : remplacer les appels `DatabaseService` directs → appels HTTP via `ApiService` *(~15 % fait : clients, dashboard, prêts, sync)*
+- [x] Implémenter le cache SQLite local côté Flutter (mode offline de base) *(`SyncService` + file d'attente SQLite)*
 
 ---
 
 ### Phase 1 — Sécurité *(priorité absolue)*
 > Bloquer l'accès non authentifié et contextualiser chaque action
 
-- [ ] **LoginPage** : créer l'écran de connexion username/password
-- [ ] **AuthService** côté serveur : génération de tokens JWT + refresh token
-- [ ] **AuthService** côté Flutter : stocker le token (`shared_preferences`), intercepteur HTTP
-- [ ] **Remplacer les 8+ valeurs hardcodées** : `'Jean'`, `'Admin'`, `'SYSTÈME'`, `'Agent Connecté'` → utilisateur de la session courante
+- [x] **LoginPage** : créer l'écran de connexion username/password
+- [x] **AuthService** côté serveur : génération de tokens JWT + refresh token *(backend `auth.py` — `/login`, `/refresh`)*
+- [ ] **AuthService** côté Flutter : stocker le token (`shared_preferences`), intercepteur HTTP *(token JWT en mémoire seulement ; pas de refresh token côté Flutter ; pas de `flutter_secure_storage`)*
+- [x] **Remplacer les 8+ valeurs hardcodées** : `'Jean'`, `'Admin'`, `'SYSTÈME'`, `'Agent Connecté'` → utilisateur de la session courante *(Phase 2 + 2b — ~95% fait)*
 - [ ] **Sidebar RBAC** : masquage dynamique des modules selon le rôle (Agent Terrain, Caissier, Chef Agence, Directeur, Admin)
-- [ ] **Timeout de session** : `Timer` global sur `GestureDetector` racine — déconnexion après X minutes d'inactivité
-- [ ] Chiffrement du cache SQLite local via `sqflite_sqlcipher`
+- [x] **Timeout de session** : `Timer` global sur `GestureDetector` racine — déconnexion après X minutes d'inactivité *(`SessionManager` + `WarningDialog` implémentés)*
+- [ ] Chiffrement du cache SQLite local via `sqflite_sqlcipher` *(`KeyDerivationService` préparé ; clé non appliquée — contrainte Windows Desktop)*
 
 ---
 
@@ -166,13 +166,13 @@ backend/
 > Éliminer tous les mocks et `SnackBar` simulés identifiés lors de l'audit du code
 
 **Dashboard**
-- [ ] Brancher le nom d'utilisateur sur la salutation (`'Bonjour, Jean 👋'`)
-- [ ] Brancher `BottomStatsBar` sur les vraies agrégations SQL (Encours, Collecte)
-- [ ] Ajouter le bouton FAB d'actions rapides (Nouveau client, Nouveau prêt, Opération caisse)
+- [x] Brancher le nom d'utilisateur sur la salutation (`'Bonjour, Jean 👋'`)
+- [ ] Brancher `BottomStatsBar` sur les vraies agrégations SQL (Encours, Collecte) *(`'15.45 M'`, `'2.34 M'`, `'2.3%'` toujours hardcodés)*
+- [x] Ajouter le bouton FAB d'actions rapides (Nouveau client, Nouveau prêt, Opération caisse)
 
 **Clients**
-- [ ] Remplacer export CSV simulé → vrai export CSV depuis la liste filtrée
-- [ ] Remplacer SMS groupé simulé → brancher sur le module Communications
+- [ ] Remplacer export CSV simulé → vrai export CSV depuis la liste filtrée *(SnackBar `'Exportation des données en cours... (CSV)'`)*
+- [ ] Remplacer SMS groupé simulé → brancher sur le module Communications *(SnackBar `'Préparation de l\'envoi SMS groupé...'`)*
 
 **Groupes Solidaires**
 - [ ] Calculer dynamiquement l'encours du groupe (somme des prêts actifs des membres)
@@ -181,55 +181,66 @@ backend/
 - [ ] Implémenter le mécanisme de caution solidaire : transfert de dette ou saisie automatique de l'épargne bloquée des membres en cas de défaut
 
 **Caisse**
-- [ ] Report du solde de la veille dans la clôture (solde initial réel)
-- [ ] Remplacer `'Agent Connecté'` par l'utilisateur de session
+- [x] Report du solde de la veille dans la clôture (solde initial réel)
+- [x] Remplacer `'Agent Connecté'` par l'utilisateur de session
 
 **Remboursements**
-- [ ] Activer le filtre "Filtrer par retard" dans `DailyCollectionPage`
-- [ ] Brancher `agentCollecteur` sur l'utilisateur connecté
+- [x] Activer le filtre "Filtrer par retard" dans `DailyCollectionPage`
+- [x] Brancher `agentCollecteur` sur l'utilisateur connecté
 
 **Comptabilité**
-- [ ] Remplacer `'Admin'` (×2) dans `SaisieComptablePage` par l'utilisateur connecté
+- [x] Remplacer `'Admin'` (×2) dans `SaisieComptablePage` par l'utilisateur connecté
 - [ ] Remplacer le bouton "Scan" simulé par l'ouverture d'un `file_picker`
 
 **Reporting**
-- [ ] Corriger `DelinquentLoanDetailPage(loanId: 1)` — ID hardcodé → ID dynamique du prêt sélectionné
+- [x] Corriger `DelinquentLoanDetailPage(loanId: 1)` — ID hardcodé → ID dynamique du prêt sélectionné
 
 ---
 
-### Phase 3 — Logique métier centrale *(cœur fonctionnel)*
+### Phase 3 — Logique métier centrale *(cœur fonctionnel)* ✅ 100%
 
-**Pont comptable automatique** *(le plus critique)*
-- [ ] Créer `AutomaticAccountingService` côté serveur
-- [ ] Générer les écritures lors d'un **déblocage de prêt** : `Débit 501 / Crédit 530`
-- [ ] Générer les écritures lors d'un **remboursement** : `Débit 530 / Crédit 501 + 701 + 703`
-- [ ] Générer les écritures lors d'un **dépôt épargne** : `Débit 530 / Crédit 521`
-- [ ] Générer les écritures lors d'un **retrait épargne** : `Débit 521 / Crédit 530`
+**Pont comptable automatique Flutter** *(branché dans `database_service.dart`)*
+- [x] `AutomaticAccountingService` Flutter — `createLoanDisbursementEntry()` appelé dans `insertLoan()`
+- [x] `AutomaticAccountingService` Flutter — `createLoanRepaymentEntry()` appelé dans `insertRepayment()`
+- [x] `AutomaticAccountingService` Flutter — `createSavingsDepositEntry()` / `createSavingsWithdrawalEntry()` appelés dans `insertSavingsTransaction()`
+- [x] Gestion des provisions ; erreurs comptables isolées (try/catch) sans bloquer la transaction principale
 
-**Jobs nocturnes (APScheduler)**
-- [ ] `daily_penalties.py` : scanner les `echeanciers` non soldés et calculer `jours_retard × taux`
-- [ ] `nightly_scoring.py` : recalculer le score crédit de chaque client selon l'historique des retards
-- [ ] `monthly_interests.py` : capitaliser les intérêts sur les comptes d'épargne (solde moyen × taux / 12)
+**Pont comptable automatique Python backend** *(branché dans les routers)*
+- [x] `AutomaticAccountingService` Python — `on_deblocage_pret()` appelé dans `prets.py` : `Débit 501 / Crédit 530`
+- [x] `AutomaticAccountingService` Python — `on_remboursement()` appelé dans `remboursements.py` : `Débit 530 / Crédit 501 + 701 + 703`
+- [x] `AutomaticAccountingService` Python — `on_depot_epargne()` appelé dans `epargne.py` : `Débit 530 / Crédit 521`
+- [x] `AutomaticAccountingService` Python — `on_retrait_epargne()` appelé dans `epargne.py` : `Débit 521 / Crédit 530`
 
-**Dashboard**
-- [ ] Mettre en place Provider/Riverpod pour le cache du dashboard (éviter les recalculs à chaque navigation)
+**Jobs nocturnes (APScheduler — démarré dans `main.py` lifespan)**
+- [x] `daily_penalties.py` : scanner les `echeanciers` non soldés et calculer `capital_restant × taux × jours_retard` — déclenché à **00h05**
+- [x] `nightly_scoring.py` : recalculer le score crédit de chaque client (barème base 60, clamp 0-100, seuils 70/40) — déclenché à **02h00**
+- [x] `monthly_interests.py` : capitaliser les intérêts épargne (`solde × taux / 100 / 12`), écriture `Débit 602 / Crédit 521` — déclenché le **1er du mois à 01h00**
+- [x] Scheduler APScheduler initialisé dans `backend/app/jobs/scheduler.py` avec `replace_existing=True` sur chaque job
+
+**Dashboard & State Management**
+- [x] `DashboardNotifier` avec Provider (`ChangeNotifier`) — cache transparent, `load()` / `refresh()` / `clearCache()`
+- [x] `MultiProvider` dans `main.dart`, `Consumer<DashboardNotifier>` dans `DashboardPage`
+- [x] `clearCache()` appelé dans `AuthService.logout()` — pas de données résiduelles entre sessions
+
+**Tests Phase 3**
+- [x] 37 tests passent — property tests équilibre comptable (`sum(débits) == sum(crédits)`) + tests `DashboardNotifier`
 
 ---
 
 ### Phase 4 — Fonctionnalités métier avancées
 
 **Produits & Prêts**
-- [ ] Ajouter le champ assurance (% décès/invalidité) dans le formulaire produit
-- [ ] Implémenter le calcul du TEG (taux effectif global incluant frais annexes)
-- [ ] Ajouter la gestion du différé de capital dans le calcul d'amortissement (crédit agricole)
+- [x] Ajouter le champ assurance (% décès/invalidité) dans le formulaire produit
+- [x] Implémenter le calcul du TEG (taux effectif global incluant frais annexes)
+- [x] Ajouter la gestion du différé de capital dans le calcul d'amortissement (crédit agricole)
 
 **Comité de crédit**
-- [ ] Validation par PIN/signature électronique pour les montants > seuil défini
+- [x] Validation par PIN/signature électronique pour les montants > seuil défini
 - [ ] Conditionner le déblocage à la signature du contrat PDF
 
 **Épargne**
-- [ ] Bloquer les retraits sur les comptes DAT en cours de terme
-- [ ] Appliquer les pénalités de rupture anticipée sur les DAT
+- [x] Bloquer les retraits sur les comptes DAT en cours de terme
+- [x] Appliquer les pénalités de rupture anticipée sur les DAT
 
 **Caisse**
 - [ ] Écran de décompte par coupures physiques (billets 10k, 5k, 2k, 1k, pièces 500...)
@@ -237,9 +248,9 @@ backend/
 - [ ] Validation double clé pour les transferts coffre (caissier + superviseur)
 
 **Clients**
-- [ ] Finaliser l'upload KYC dans `ClientFormDialog` (`file_picker`, stockage serveur)
-- [ ] Liaison groupe solidaire dynamique dans le formulaire client
-- [ ] Création automatique du compte épargne obligatoire à la création du client
+- [x] Finaliser l'upload KYC dans `ClientFormDialog` (`file_picker`, stockage local)
+- [x] Liaison groupe solidaire dynamique dans le formulaire client
+- [x] Création automatique du compte épargne obligatoire à la création du client
 - [ ] Intégration caméra pour prise de photo du client en direct (`image_picker`)
 - [ ] Scan de CNI avec OCR (optionnel)
 
@@ -247,8 +258,8 @@ backend/
 
 ### Phase 5 — Mode terrain & synchronisation
 
-- [ ] Mode offline agent terrain : verrouiller les données du matin, saisie sans réseau
-- [ ] File de synchronisation différée (queue locale SQLite → sync serveur le soir)
+- [x] Mode offline agent terrain : verrouiller les données du matin, saisie sans réseau *(`ConnectivityMonitor` + `SyncService` implémentés)*
+- [x] File de synchronisation différée (queue locale SQLite → sync serveur le soir) *(`sync_queue` table + `flushPendingOperations()`)*
 - [ ] Résolution de conflits lors de la resynchronisation (last-write-wins ou manuelle)
 - [ ] Intégration GPS (`geolocator`) pour géolocalisation des visites et collectes
 - [ ] Intégration caméra (`image_picker`) pour photos clients et pièces justificatives

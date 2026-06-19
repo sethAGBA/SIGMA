@@ -2,7 +2,10 @@
 
 import 'package:flutter/material.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/loan_api_service.dart';
 import '../../models/loan_model.dart';
+import '../../models/agent_model.dart';
+import '../../models/agency_model.dart';
 import '../remboursements/repayment_form_dialog.dart';
 import '../../core/theme/app_colors.dart';
 import 'loan_detail_dialog.dart';
@@ -21,16 +24,39 @@ class _LoanListPageState extends State<LoanListPage> {
   String? _selectedAgence;
   String? _selectedAgent;
   String? _selectedRisque;
+  List<Agent> _agents = [];
+  List<Agency> _agencies = [];
 
   @override
   void initState() {
     super.initState();
+    _loadFilterOptions();
     _refreshLoans();
+  }
+
+  Future<void> _loadFilterOptions() async {
+    final agents = await DatabaseService().getAgents();
+    final agencies = await DatabaseService().getAgencies();
+    if (mounted) {
+      setState(() {
+        _agents = agents.where((a) => a.isActive).toList();
+        _agencies = agencies.where((a) => a.isActive).toList();
+        final agentNames =
+            _agents.map((a) => '${a.firstName} ${a.lastName}').toSet();
+        final agencyNames = _agencies.map((a) => a.name).toSet();
+        if (_selectedAgent != null && !agentNames.contains(_selectedAgent)) {
+          _selectedAgent = null;
+        }
+        if (_selectedAgence != null && !agencyNames.contains(_selectedAgence)) {
+          _selectedAgence = null;
+        }
+      });
+    }
   }
 
   void _refreshLoans() {
     setState(() {
-      _loansFuture = DatabaseService().getLoans();
+      _loansFuture = LoanApiService().getLoans();
     });
   }
 
@@ -234,53 +260,51 @@ class _LoanListPageState extends State<LoanListPage> {
             Row(
               children: [
                 Expanded(
-                  child: DropdownButtonFormField<String>(
+                  child: DropdownButtonFormField<String?>(
+                    value: _selectedAgence,
                     decoration: InputDecoration(
                       labelText: 'Agence',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    items:
-                        [
-                              'Toutes',
-                              'Agence Centrale',
-                              'Agence Nord',
-                              'Agence Sud',
-                            ]
-                            .map(
-                              (s) => DropdownMenuItem(
-                                value: s == 'Toutes' ? null : s,
-                                child: Text(s),
-                              ),
-                            )
-                            .toList(),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Toutes'),
+                      ),
+                      ..._agencies.map(
+                        (a) => DropdownMenuItem<String?>(
+                          value: a.name,
+                          child: Text(a.name),
+                        ),
+                      ),
+                    ],
                     onChanged: (v) => setState(() => _selectedAgence = v),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: DropdownButtonFormField<String>(
+                  child: DropdownButtonFormField<String?>(
+                    value: _selectedAgent,
                     decoration: InputDecoration(
                       labelText: 'Agent Gestionnaire',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    items:
-                        [
-                              'Tous agents',
-                              'Jean KOUASSI',
-                              'Marie DIALLO',
-                              'Paul BIYA',
-                            ]
-                            .map(
-                              (s) => DropdownMenuItem(
-                                value: s == 'Tous agents' ? null : s,
-                                child: Text(s),
-                              ),
-                            )
-                            .toList(),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Tous agents'),
+                      ),
+                      ..._agents.map(
+                        (a) => DropdownMenuItem<String?>(
+                          value: '${a.firstName} ${a.lastName}',
+                          child: Text('${a.firstName} ${a.lastName}'),
+                        ),
+                      ),
+                    ],
                     onChanged: (v) => setState(() => _selectedAgent = v),
                   ),
                 ),

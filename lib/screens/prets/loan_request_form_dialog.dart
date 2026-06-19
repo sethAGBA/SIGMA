@@ -6,6 +6,7 @@ import '../../models/client_model.dart';
 import '../../models/produit_financier_model.dart';
 import '../../models/loan_request_model.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/loan_calculator.dart';
 import '../../widgets/dialogs/client_form_dialog.dart';
 import 'dart:math' as math;
 
@@ -27,6 +28,7 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
   // Controllers - Step 1 & 2
   final _amountController = TextEditingController();
   final _durationController = TextEditingController();
+  final _differeController = TextEditingController(text: '0');
   final _objectController = TextEditingController();
 
   // Controllers - Step 4 (Analyse Financière)
@@ -53,6 +55,8 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
   double _totalARembourser = 0;
   double _coutTotalCredit = 0;
   double _teg = 0;
+  static const double _seuilUsureTeg = 36.0;
+  double _fraisDossierStandard = 0;
   double _tauxEffort = 0;
   double _capaciteRemboursement = 0;
   double _resteAVivre = 0;
@@ -72,9 +76,11 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
     final products = await DatabaseService().getProduits(
       type: ProductType.credit,
     );
+    final finParams = await DatabaseService().getFinancialParameters();
     setState(() {
       _clients = clients;
       _products = products;
+      _fraisDossierStandard = finParams.fraisDossierStandard;
     });
   }
 
@@ -99,7 +105,13 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
     }
 
     _coutTotalCredit = _totalARembourser - capital;
-    _teg = annualRate * 100;
+    _teg = LoanCalculator.calculerTEG(
+      tauxNominalAnnuel: _selectedProduct!.tauxInteret,
+      tauxAssurance: _selectedProduct!.tauxAssurance ?? 0,
+      fraisDossier: _fraisDossierStandard,
+      montantPret: capital,
+      dureesMois: months,
+    );
 
     double rev = double.tryParse(_revenusController.text) ?? 0;
     double ch = double.tryParse(_chargesController.text) ?? 0;
@@ -126,6 +138,7 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
       totalARembourser: _totalARembourser,
       coutTotalCredit: _coutTotalCredit,
       teg: _teg,
+      moisDiffereCapital: int.tryParse(_differeController.text) ?? 0,
       revenusMensuels: double.tryParse(_revenusController.text) ?? 0,
       chargesMensuelles: double.tryParse(_chargesController.text) ?? 0,
       autresDettes: double.tryParse(_autresDettesController.text) ?? 0,
@@ -414,7 +427,10 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  onTap: () => setState(() => _selectedProduct = product),
+                  onTap: () => setState(() {
+                    _selectedProduct = product;
+                    _calculateSimulation();
+                  }),
                 ),
               );
             },
@@ -454,23 +470,81 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
             ],
           ),
         ),
+        if (_selectedProduct?.differePossible == true) ...[
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _differeController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: 'Mois de différé capital',
+              border: const OutlineInputBorder(),
+              helperText:
+                  'Max ${_selectedProduct?.dureeMaxDiffereCapitalMois ?? 0} mois',
+            ),
+            onChanged: (_) => _calculateSimulation(),
+            validator: (v) {
+              final val = int.tryParse(v ?? '') ?? 0;
+              final max = _selectedProduct?.dureeMaxDiffereCapitalMois ?? 0;
+              if (val < 0 || val > max) {
+                return 'Entre 0 et $max mois';
+              }
+              return null;
+            },
+          ),
+        ],
       ],
     );
   }
 
   Widget _buildSimulationStep() {
     _calculateSimulation();
+    final tegDepasseUsure = _teg > _seuilUsureTeg;
     return Column(
       children: [
+        if (tegDepasseUsure)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade100,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'TEG ${_teg.toStringAsFixed(2)} % > seuil d\'usure ($_seuilUsureTeg %)',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ),
         Row(
           children: [
             _buildResultBox('Mensualité', _mensualite),
             const SizedBox(width: 12),
             _buildResultBox('Total dû', _totalARembourser),
             const SizedBox(width: 12),
-            _buildResultBox('TEG (%)', _teg, isPercent: true),
+            _buildResultBox(
+              'TEG (%)',
+              _teg,
+              isPercent: true,
+              highlight: tegDepasseUsure ? Colors.orange : null,
+            ),
           ],
         ),
+        if (_selectedProduct != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Taux nominal : ${_selectedProduct!.tauxInteret.toStringAsFixed(2)} %/an',
+            style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+          ),
+        ],
         const SizedBox(height: 24),
         const Text(
           'Tableau d\'amortissement indicatif',
@@ -910,14 +984,19 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
     );
   }
 
-  Widget _buildResultBox(String label, double value, {bool isPercent = false}) {
+  Widget _buildResultBox(
+    String label,
+    double value, {
+    bool isPercent = false,
+    Color? highlight,
+  }) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[200]!),
+          border: Border.all(color: highlight ?? Colors.grey[200]!),
         ),
         child: Column(
           children: [
@@ -929,10 +1008,10 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
               isPercent
                   ? '${value.toStringAsFixed(1)}%'
                   : '${_formatAmount(value)} FCFA',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: AppColors.primary,
+                color: highlight ?? AppColors.primary,
               ),
             ),
           ],

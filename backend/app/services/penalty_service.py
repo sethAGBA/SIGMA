@@ -1,3 +1,4 @@
+# Phase 3 OK
 """
 PenaltyService — Calcul automatique des pénalités de retard.
 

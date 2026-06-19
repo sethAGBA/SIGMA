@@ -4,8 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/utils/audit_field_utils.dart';
 import '../../models/savings_account_model.dart';
 import '../../models/savings_transaction_model.dart';
+import '../../models/produit_financier_model.dart';
+import 'break_dat_dialog.dart';
 
 class SavingsOperationDialog extends StatefulWidget {
   final SavingsAccount account;
@@ -51,27 +55,54 @@ class _SavingsOperationDialogState extends State<SavingsOperationDialog> {
         0;
     if (amount <= 0) return;
 
-    if (_type == SavingsTransactionType.retrait &&
-        amount > widget.account.solde) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Solde insuffisant pour ce retrait')),
-      );
-      return;
+    double debitAmount = amount;
+    if (_type == SavingsTransactionType.retrait) {
+      final produit = widget.account.produit;
+      final echeance = widget.account.dateEcheanceTerme;
+      final isDatBloque = produit?.savingsCategory == SavingsCategory.bloquee;
+      if (isDatBloque &&
+          echeance != null &&
+          DateTime.now().isBefore(echeance)) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (_) => BreakDATDialog(account: widget.account),
+        );
+        if (confirmed != true) return;
+
+        final penalite = BreakDATDialog.calculerPenalite(widget.account);
+        debitAmount = amount + penalite;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Pénalité rupture DAT : ${currencyFormat.format(penalite)}',
+              ),
+            ),
+          );
+        }
+      }
+
+      if (debitAmount > widget.account.solde) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Solde insuffisant pour ce retrait')),
+        );
+        return;
+      }
     }
 
     setState(() => _isLoading = true);
 
     final newBalance = _type == SavingsTransactionType.depot
         ? widget.account.solde + amount
-        : widget.account.solde - amount;
+        : widget.account.solde - debitAmount;
 
     final transaction = SavingsTransaction(
       compteId: widget.account.id!,
       type: _type,
-      montant: amount,
+      montant: _type == SavingsTransactionType.depot ? amount : debitAmount,
       soldeApres: newBalance,
       dateOperation: DateTime.now(),
-      agentOperation: 'Agent Connecté', // Placeholder
+      agentOperation: auditFieldValue(AuthService().currentUsername),
       numeroPiece: _pieceController.text,
       commentaire: _commentController.text,
     );

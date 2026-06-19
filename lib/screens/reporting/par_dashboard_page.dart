@@ -7,7 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/pdf_export_service.dart';
 import '../../models/par_stats_model.dart';
-import 'delinquent_loan_detail_page.dart';
+import 'delinquent_loans_list_page.dart';
 
 class PARDashboardPage extends StatefulWidget {
   const PARDashboardPage({super.key});
@@ -653,9 +653,10 @@ class _PARDashboardPageState extends State<PARDashboardPage> {
   }
 
   void _navigateToDetail() {
-    showDialog(
-      context: context,
-      builder: (context) => const DelinquentLoanDetailPage(loanId: 1),
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const DelinquentLoansListPage(),
+      ),
     );
   }
 

@@ -24,12 +24,34 @@ class _OpenSavingsAccountDialogState extends State<OpenSavingsAccountDialog> {
   Client? _selectedClient;
   ProduitFinancier? _selectedProduct;
   final _accountNumberController = TextEditingController();
+  DateTime? _dateEcheanceTerme;
+  final _penaliteController = TextEditingController(text: '0');
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _accountNumberController.dispose();
+    _penaliteController.dispose();
+    super.dispose();
+  }
+
+  bool get _isDatProduct =>
+      _selectedProduct?.savingsCategory == SavingsCategory.bloquee;
+
+  Future<void> _pickEcheanceTerme() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 365)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 10)),
+    );
+    if (picked != null) setState(() => _dateEcheanceTerme = picked);
   }
 
   Future<void> _loadData() async {
@@ -85,6 +107,10 @@ class _OpenSavingsAccountDialogState extends State<OpenSavingsAccountDialog> {
       statut: SavingsAccountStatus.actif,
       dateOuverture: DateTime.now(),
       tauxInteretApplique: _selectedProduct!.tauxInteret,
+      dateEcheanceTerme: _isDatProduct ? _dateEcheanceTerme : null,
+      tauxPenaliteRuptureAnt: _isDatProduct
+          ? double.tryParse(_penaliteController.text)
+          : null,
     );
 
     try {
@@ -190,6 +216,9 @@ class _OpenSavingsAccountDialogState extends State<OpenSavingsAccountDialog> {
                       onChanged: (val) {
                         setState(() {
                           _selectedProduct = val;
+                          if (val?.savingsCategory != SavingsCategory.bloquee) {
+                            _dateEcheanceTerme = null;
+                          }
                           _generateAccountNumber();
                         });
                       },
@@ -237,6 +266,42 @@ class _OpenSavingsAccountDialogState extends State<OpenSavingsAccountDialog> {
                           ? 'Champ obligatoire'
                           : null,
                     ),
+
+                    if (_isDatProduct) ...[
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Échéance du terme (DAT)',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: _pickEcheanceTerme,
+                        icon: const Icon(Icons.calendar_today),
+                        label: Text(
+                          _dateEcheanceTerme == null
+                              ? 'Choisir la date d\'échéance'
+                              : '${_dateEcheanceTerme!.day.toString().padLeft(2, '0')}/${_dateEcheanceTerme!.month.toString().padLeft(2, '0')}/${_dateEcheanceTerme!.year}',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _penaliteController,
+                        keyboardType:
+                            const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          labelText: 'Pénalité rupture anticipée',
+                          suffixText: '%',
+                          filled: true,
+                          fillColor: isDark
+                              ? Colors.white.withOpacity(0.05)
+                              : Colors.grey[100],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ],
 
                     const SizedBox(height: 32),
 

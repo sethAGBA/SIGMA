@@ -1,15 +1,21 @@
 // lib/screens/dashboard/dashboard_page.dart
+// Phase 3 — Exigences 9.2, 9.3, 9.4
+// Consomme DashboardNotifier via Provider pour un cache transparent.
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/dashboard_data.dart';
 import '../../widgets/dashboard/kpi_card.dart';
 import '../../widgets/dashboard/portfolio_chart.dart';
 import '../../widgets/dashboard/alerts_section.dart';
 import '../../widgets/dashboard/top_agents_section.dart';
-import '../../core/services/database_service.dart';
+import '../../core/notifiers/dashboard_notifier.dart';
 import '../../core/services/auth_service.dart';
-import '../../core/services/api_service.dart';
 import '../../core/services/sync_service.dart';
+import '../../core/services/api_service.dart';
+import '../../widgets/dialogs/client_form_dialog.dart';
+import '../prets/loan_request_form_dialog.dart';
+import '../caisse/cash_miscellaneous_dialog.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -19,184 +25,96 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  List<DashboardKPI> kpis = [];
-  List<PortfolioDataPoint> portfolioData = [];
-  List<AlertItem> alerts = [];
-  List<AgentPerformance> topAgents = [];
-  bool isLoading = true;
-  bool _isOnline = false; // indicateur mode serveur
+  bool _isOnline = false;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    setState(() => isLoading = true);
-    try {
-      final serverAvailable = await ApiService().isServerAvailable();
-      if (mounted) setState(() => _isOnline = serverAvailable);
-
-      HomeDashboardData data;
-
-      if (serverAvailable) {
-        // CONNECTÉ → données du serveur (agrégation de tous les postes)
-        final apiData = await _loadFromApi();
-        if (apiData != null) {
-          // Enrichir avec les données locales (graphique + agents)
-          final localData = await DatabaseService().getHomeDashboardData();
-          data = HomeDashboardData(
-            kpis: apiData.kpis,
-            portfolioData: localData.portfolioData,
-            alerts: [...apiData.alerts, ...localData.alerts]
-                .toSet()
-                .toList(),
-            topAgents: localData.topAgents,
-          );
-        } else {
-          // API dispo mais réponse vide → fallback local
-          data = await DatabaseService().getHomeDashboardData();
-        }
-      } else {
-        // OFFLINE → cache local uniquement
-        data = await DatabaseService().getHomeDashboardData();
-      }
-
+    // Charge seulement si le cache est vide ; sinon affichage immédiat
+    // (Exigence 9.2). postFrameCallback pour éviter un setState pendant build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        setState(() {
-          kpis = data.kpis;
-          portfolioData = data.portfolioData;
-          alerts = data.alerts;
-          topAgents = data.topAgents;
-          isLoading = false;
-        });
+        context.read<DashboardNotifier>().load();
+        _checkConnectivity();
       }
-
-      // Tenter de vider la file de sync en arrière-plan
-      if (serverAvailable) {
-        SyncService().flushPendingOperations();
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur de chargement: $e')),
-        );
-      }
-    }
+    });
   }
 
-  Future<HomeDashboardData?> _loadFromApi() async {
-    final response = await ApiService().get('/reporting/dashboard');
-    final data = ApiService.decodeResponse(response);
-    if (data == null) return null;
-
-    // Construire les KPIs depuis la réponse API
-    final kpis = <DashboardKPI>[
-      DashboardKPI(
-        title: 'Clients Actifs',
-        value: '${data['clients_actifs'] ?? 0}',
-        variation: '+0',
-        isPositive: true,
-        icon: Icons.people_rounded,
-        color: const Color(0xFF3B82F6),
-      ),
-      DashboardKPI(
-        title: 'Encours Total',
-        value: _formatAmount((data['encours_total'] as num?)?.toDouble() ?? 0),
-        variation: '+0%',
-        isPositive: true,
-        icon: Icons.account_balance_wallet_rounded,
-        color: const Color(0xFF10B981),
-      ),
-      DashboardKPI(
-        title: 'PAR > 30j',
-        value: '${data['taux_remboursement'] ?? 0}%',
-        variation: 'Normal',
-        isPositive: true,
-        icon: Icons.trending_down_rounded,
-        color: const Color(0xFFF59E0B),
-      ),
-      DashboardKPI(
-        title: 'Prêts Actifs',
-        value: '${data['prets_actifs'] ?? 0}',
-        variation: '0',
-        isPositive: true,
-        icon: Icons.payments_rounded,
-        color: const Color(0xFF8B5CF6),
-      ),
-    ];
-
-    // Alertes
-    final alerts = <AlertItem>[];
-    final pretsEnRetard = (data['prets_en_retard'] as num?)?.toInt() ?? 0;
-    if (pretsEnRetard > 0) {
-      alerts.add(AlertItem(
-        title: '$pretsEnRetard prêts en retard',
-        description: 'Actions de recouvrement requises',
-        level: AlertLevel.warning,
-        icon: Icons.warning_rounded,
-      ));
-    }
-
-    return HomeDashboardData(
-      kpis: kpis,
-      portfolioData: [],
-      alerts: alerts,
-      topAgents: [],
-    );
-  }
-
-  String _formatAmount(double amount) {
-    if (amount >= 1000000) return '${(amount / 1000000).toStringAsFixed(1)}M';
-    if (amount >= 1000) return '${(amount / 1000).toStringAsFixed(0)}k';
-    return amount.toStringAsFixed(0);
+  Future<void> _checkConnectivity() async {
+    final online = await ApiService().isServerAvailable();
+    if (mounted) setState(() => _isOnline = online);
+    if (online) SyncService().flushPendingOperations();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      backgroundColor: theme.colorScheme.background,
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadData,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Welcome section
-                    _buildWelcomeSection(theme),
-                    const SizedBox(height: 24),
+    return Consumer<DashboardNotifier>(
+      builder: (context, notifier, _) {
+        final isLoading = notifier.isLoading && notifier.cachedData == null;
+        final data = notifier.cachedData;
 
-                    // KPI Cards Grid
-                    _buildKPIGrid(),
-                    const SizedBox(height: 24),
+        // Afficher une erreur non bloquante en SnackBar si besoin
+        if (notifier.error != null && data != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Erreur de synchronisation: ${notifier.error}')),
+              );
+            }
+          });
+        }
 
-                    // Portfolio Chart
-                    PortfolioChart(data: portfolioData),
-                    const SizedBox(height: 24),
-
-                    // Alerts and Top Agents Row
-                    Row(
+        return Scaffold(
+          backgroundColor: theme.colorScheme.surface,
+          floatingActionButton: _buildQuickActionsFab(context),
+          body: isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                  // Exigence 9.3 : le refresh force le rechargement depuis la source
+                  onRefresh: () async {
+                    await notifier.refresh();
+                    await _checkConnectivity();
+                  },
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(flex: 3, child: AlertsSection(alerts: alerts)),
-                        const SizedBox(width: 24),
-                        Expanded(
-                          flex: 2,
-                          child: TopAgentsSection(agents: topAgents),
+                        // Welcome section
+                        _buildWelcomeSection(theme),
+                        const SizedBox(height: 24),
+
+                        // KPI Cards Grid
+                        _buildKPIGrid(data?.kpis ?? []),
+                        const SizedBox(height: 24),
+
+                        // Portfolio Chart
+                        PortfolioChart(data: data?.portfolioData ?? []),
+                        const SizedBox(height: 24),
+
+                        // Alerts and Top Agents Row
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: AlertsSection(alerts: data?.alerts ?? []),
+                            ),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              flex: 2,
+                              child: TopAgentsSection(agents: data?.topAgents ?? []),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
+        );
+      },
     );
   }
 
@@ -219,7 +137,7 @@ class _DashboardPageState extends State<DashboardPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '$greeting, ${AuthService().currentUser?.username ?? 'Utilisateur'} 👋',
+              '$greeting, ${AuthService().currentUser?.username ?? 'Utilisateur'} 👋', // Phase 2 OK
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -244,13 +162,13 @@ class _DashboardPageState extends State<DashboardPage> {
             color: (_isOnline
                     ? const Color(0xFF10B981)
                     : Colors.orange)
-                .withOpacity(0.1),
+                .withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: (_isOnline
                       ? const Color(0xFF10B981)
                       : Colors.orange)
-                  .withOpacity(0.3),
+                  .withValues(alpha: 0.3),
             ),
           ),
           child: Row(
@@ -280,10 +198,10 @@ class _DashboardPageState extends State<DashboardPage> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.1),
+            color: theme.colorScheme.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: theme.colorScheme.primary.withOpacity(0.2),
+              color: theme.colorScheme.primary.withValues(alpha: 0.2),
               width: 1,
             ),
           ),
@@ -310,7 +228,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildKPIGrid() {
+  Widget _buildKPIGrid(List<DashboardKPI> kpis) {
     return LayoutBuilder(
       builder: (context, constraints) {
         // Responsive grid: 4 columns on large screens, 2 on medium, 1 on small
@@ -337,6 +255,113 @@ class _DashboardPageState extends State<DashboardPage> {
           },
         );
       },
+    );
+  }
+
+  // Phase 2 OK — FAB avec 3 actions, navigation réelle, désactivation RBAC (Exigences 3.1–3.5)
+  Widget? _buildQuickActionsFab(BuildContext context) {
+    final auth = AuthService();
+    final hasAnyAction = auth.canAccess('create_client') ||
+        auth.canAccess('create_loan') ||
+        auth.canAccess('cash_operation');
+
+    if (!hasAnyAction) return null;
+
+    return FloatingActionButton.extended(
+      heroTag: 'fab-dashboard',
+      onPressed: () => _showQuickActionsMenu(context),
+      icon: const Icon(Icons.bolt_rounded),
+      label: const Text('Actions rapides'),
+    );
+  }
+
+  void _showQuickActionsMenu(BuildContext context) {
+    final auth = AuthService();
+    final canClient = auth.canAccess('create_client');
+    final canLoan = auth.canAccess('create_loan');
+    final canCash = auth.canAccess('cash_operation');
+
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Actions rapides',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.person_add_rounded,
+                color: canClient ? null : Colors.grey,
+              ),
+              title: Text(
+                'Nouveau client',
+                style: TextStyle(color: canClient ? null : Colors.grey),
+              ),
+              enabled: canClient,
+              onTap: canClient
+                  ? () {
+                      Navigator.pop(sheetContext);
+                      showDialog<void>(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (_) => const ClientFormDialog(),
+                      );
+                    }
+                  : null,
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.request_quote_rounded,
+                color: canLoan ? null : Colors.grey,
+              ),
+              title: Text(
+                'Nouveau prêt',
+                style: TextStyle(color: canLoan ? null : Colors.grey),
+              ),
+              enabled: canLoan,
+              onTap: canLoan
+                  ? () {
+                      Navigator.pop(sheetContext);
+                      showDialog<void>(
+                        context: context,
+                        builder: (_) => const LoanRequestFormDialog(),
+                      );
+                    }
+                  : null,
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.point_of_sale_rounded,
+                color: canCash ? null : Colors.grey,
+              ),
+              title: Text(
+                'Opération caisse',
+                style: TextStyle(color: canCash ? null : Colors.grey),
+              ),
+              enabled: canCash,
+              onTap: canCash
+                  ? () {
+                      Navigator.pop(sheetContext);
+                      showDialog<void>(
+                        context: context,
+                        builder: (_) => const CashMiscellaneousDialog(),
+                      );
+                    }
+                  : null,
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
     );
   }
 

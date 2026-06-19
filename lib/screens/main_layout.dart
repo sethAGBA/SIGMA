@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/sidebar.dart';
 import '../widgets/bottom_stats_bar.dart';
+import '../core/services/session_manager.dart';
 import 'clients/client_list_page.dart';
 import 'groupes/group_list_page.dart';
 import '../widgets/dialogs/client_form_dialog.dart';
@@ -48,6 +49,7 @@ import 'configuration/server_config_page.dart';
 import '../core/theme/app_colors.dart';
 import '../core/services/auth_service.dart';
 import '../models/user_model.dart';
+import '../widgets/sync_status_badge.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -58,9 +60,22 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0; // Default to Dashboard
+  int _dashboardRefreshKey = 0; // Incrémenté à chaque navigation vers le dashboard
+
+  @override
+  void initState() {
+    super.initState();
+    SessionManager().start();
+  }
+
+  @override
+  void dispose() {
+    SessionManager().stop();
+    super.dispose();
+  }
 
   final List<Widget> _pages = [
-    const DashboardPage(), // Index 0: Dashboard
+    const SizedBox.shrink(), // Index 0: Dashboard (construit dynamiquement, voir build()))
     const ClientListPage(), // Index 1: Registre des clients
     const GroupListPage(), // Index 2: Groupes solidaires
     const Center(
@@ -164,38 +179,54 @@ class _MainLayoutState extends State<MainLayout> {
   Widget build(BuildContext context) {
     // final theme = Theme.of(context);
 
-    return Scaffold(
-      body: Row(
-        children: [
-          Sidebar(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: (index) {
-              if (index == 3) {
-                // Ouvrir le dialogue Nouveau Client au lieu de naviguer
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (context) => const ClientFormDialog(),
-                );
-              } else {
-                setState(() {
-                  _selectedIndex = index;
-                });
-              }
-            },
-          ),
-          Expanded(
-            child: Column(
-              children: [
-                _buildAppBar(context),
-                Expanded(
-                  child: IndexedStack(index: _selectedIndex, children: _pages),
-                ),
-                const BottomStatsBar(),
-              ],
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => SessionManager().resetTimer(),
+      onPanUpdate: (_) => SessionManager().resetTimer(),
+      child: Scaffold(
+        body: Row(
+          children: [
+            Sidebar(
+              selectedIndex: _selectedIndex,
+              onDestinationSelected: (index) {
+                if (index == 3) {
+                  // Ouvrir le dialogue Nouveau Client au lieu de naviguer
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => const ClientFormDialog(),
+                  );
+                } else {
+                  setState(() {
+                    // Incrémenter la key du dashboard quand on y revient → force rebuild + rechargement
+                    if (index == 0 && _selectedIndex != 0) {
+                      _dashboardRefreshKey++;
+                    }
+                    _selectedIndex = index;
+                  });
+                }
+              },
             ),
-          ),
-        ],
+            Expanded(
+              child: Column(
+                children: [
+                  _buildAppBar(context),
+                  Expanded(
+                    child: IndexedStack(
+                      index: _selectedIndex,
+                      children: [
+                        // Index 0: Dashboard — reconstruit à chaque navigation grâce à la key
+                        DashboardPage(key: ValueKey(_dashboardRefreshKey)),
+                        ..._pages.sublist(1),
+                      ],
+                    ),
+                  ),
+                  const BottomStatsBar(),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -236,6 +267,8 @@ class _MainLayoutState extends State<MainLayout> {
             'Alertes',
             badge: '3',
           ),
+          const SizedBox(width: 8),
+          const SyncStatusBadge(),
           const SizedBox(width: 24),
           _buildUserProfile(context),
         ],

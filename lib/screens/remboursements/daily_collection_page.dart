@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/auth_service.dart';
 import '../../models/repayment_schedule_model.dart';
 import 'repayment_form_dialog.dart';
 
@@ -17,6 +18,7 @@ class DailyCollectionPage extends StatefulWidget {
 class _DailyCollectionPageState extends State<DailyCollectionPage> {
   late Future<List<RepaymentSchedule>> _dailySchedules;
   late Future<Map<String, dynamic>> _statsFuture;
+  bool _filterRetard = false;
   final currencyFormat = NumberFormat.currency(
     symbol: 'FCFA',
     decimalDigits: 0,
@@ -31,7 +33,9 @@ class _DailyCollectionPageState extends State<DailyCollectionPage> {
 
   void _refresh() {
     setState(() {
-      _dailySchedules = DatabaseService().getPendingSchedules();
+      _dailySchedules = DatabaseService().getPendingSchedules(
+        retardOnly: _filterRetard,
+      );
       _statsFuture = DatabaseService().getCollectionStats();
     });
   }
@@ -63,13 +67,51 @@ class _DailyCollectionPageState extends State<DailyCollectionPage> {
                   'Liste des échéances du jour',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                const Spacer(),
-                Text(
-                  'Filtrer par retard',
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+              const Spacer(),
+                GestureDetector(
+                  onTap: () {
+                    setState(() => _filterRetard = !_filterRetard);
+                    _refresh();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _filterRetard
+                          ? AppColors.error.withOpacity(0.1)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _filterRetard
+                            ? AppColors.error
+                            : AppColors.primary.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          size: 14,
+                          color: _filterRetard
+                              ? AppColors.error
+                              : AppColors.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Filtrer par retard',
+                          style: TextStyle(
+                            color: _filterRetard
+                                ? AppColors.error
+                                : AppColors.primary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -97,7 +139,7 @@ class _DailyCollectionPageState extends State<DailyCollectionPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'COLLECTE DU JOUR - Agent: Jean KOUASSI',
+                'COLLECTE DU JOUR - Agent: ${AuthService().currentUsername.isNotEmpty ? AuthService().currentUsername : 'Inconnu'}',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,

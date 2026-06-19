@@ -306,7 +306,7 @@ class _DelinquentLoansListPageState extends State<DelinquentLoansListPage> {
             onTap: () {
               showDialog(
                 context: context,
-                builder: (context) => DelinquentLoanDetailPage(loanId: id),
+                builder: (context) => DelinquentLoanDetailPage(loanId: id), // Phase 2 OK
               ).then((_) => _loadLoans());
             },
             borderRadius: BorderRadius.circular(24),

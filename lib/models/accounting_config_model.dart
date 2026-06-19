@@ -83,7 +83,7 @@ class AccountingConfiguration {
   // Static constants for Journals and Prefixes remain static
   static const String journalOperationsDiverses = 'OD';
 
-  static const String prefixLoanDisbursement = 'AUTO-LOAN';
+  static const String prefixLoanDisbursement = 'DBL';
   static const String prefixLoanRepayment = 'AUTO-REPAY';
   static const String prefixSavingsDeposit = 'AUTO-SAV-DEP';
   static const String prefixSavingsWithdrawal = 'AUTO-SAV-RET';

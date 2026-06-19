@@ -1,3 +1,4 @@
+# Phase 3 OK
 """
 ScoringService — Recalcul automatique du score de crédit.
 

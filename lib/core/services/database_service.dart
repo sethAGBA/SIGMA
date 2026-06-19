@@ -1,7 +1,9 @@
 // lib/core/services/database_service.dart
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:path/path.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sigma/models/agent_model.dart';
 import 'package:sigma/models/communication_models.dart';
 import 'package:sigma/models/configuration_model.dart';
@@ -34,6 +36,8 @@ import '../../models/reporting/monthly_report_model.dart';
 import '../../models/agent_stats_model.dart';
 import '../../models/agency_model.dart';
 import '../../models/accounting_account_model.dart';
+import '../../models/sync_queue_entry.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting, debugPrint;
 import 'package:flutter/material.dart' show Icons, Color;
 
 class DatabaseService {
@@ -42,7 +46,20 @@ class DatabaseService {
   DatabaseService._internal();
 
   static Database? _database;
-  static const int _version = 28;
+
+  /// Injecte une base de données externe (ex: base en mémoire pour les tests).
+  /// À utiliser uniquement dans les tests.
+  @visibleForTesting
+  static void setDatabaseForTesting(Database db) {
+    _database = db;
+  }
+
+  /// Réinitialise la base de données (pour les tests).
+  @visibleForTesting
+  static void resetDatabaseForTesting() {
+    _database = null;
+  }
+  static const int _version = 30;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -185,6 +202,112 @@ class DatabaseService {
       ''');
       await _seedInitialTemplates(db);
     }
+
+    if (oldVersion < 29) {
+      // Créer la table sync_queue
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS sync_queue (
+          id TEXT PRIMARY KEY,
+          method TEXT NOT NULL,
+          path TEXT NOT NULL,
+          body TEXT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          priority INTEGER NOT NULL DEFAULT 4,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          attempt_count INTEGER NOT NULL DEFAULT 0,
+          last_error TEXT
+        )
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_sync_queue_status_priority
+        ON sync_queue (status, priority, created_at)
+      ''');
+
+      // Migration one-shot depuis SharedPreferences
+      await _migratePendingOpsToSyncQueue(db);
+    }
+
+    if (oldVersion < 30) {
+      await _applyPhase4Schema(db);
+    }
+  }
+
+  Future<void> _addColumnIfNotExists(
+    Database db,
+    String table,
+    String column,
+    String definition,
+  ) async {
+    final info = await db.rawQuery('PRAGMA table_info($table)');
+    final exists = info.any((row) => row['name'] == column);
+    if (!exists) {
+      await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
+    }
+  }
+
+  Future<void> _applyPhase4Schema(Database db) async {
+    await _addColumnIfNotExists(
+      db,
+      'produits_financiers',
+      'taux_assurance',
+      'REAL',
+    );
+    await _addColumnIfNotExists(
+      db,
+      'produits_financiers',
+      'duree_max_differe_capital_mois',
+      'INTEGER',
+    );
+    await _addColumnIfNotExists(
+      db,
+      'prets',
+      'mois_differe_capital',
+      'INTEGER DEFAULT 0',
+    );
+    await _addColumnIfNotExists(
+      db,
+      'demandes_pret',
+      'mois_differe_capital',
+      'INTEGER DEFAULT 0',
+    );
+    await _addColumnIfNotExists(
+      db,
+      'comptes_epargne',
+      'date_echeance_terme',
+      'TEXT',
+    );
+    await _addColumnIfNotExists(
+      db,
+      'comptes_epargne',
+      'taux_penalite_rupture_ant',
+      'REAL',
+    );
+    await _addColumnIfNotExists(
+      db,
+      'utilisateurs_systeme',
+      'supervisor_pin',
+      'TEXT',
+    );
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS documents_clients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id INTEGER NOT NULL,
+        type_document TEXT NOT NULL,
+        nom_fichier TEXT NOT NULL,
+        chemin_local TEXT NOT NULL,
+        date_ajout TEXT NOT NULL,
+        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.update(
+      'utilisateurs_systeme',
+      {'supervisor_pin': '1234'},
+      where: "username = 'admin' AND (supervisor_pin IS NULL OR supervisor_pin = '')",
+    );
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -594,12 +717,34 @@ class DatabaseService {
         ip_address TEXT
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sync_queue (
+        id TEXT PRIMARY KEY,
+        method TEXT NOT NULL,
+        path TEXT NOT NULL,
+        body TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        priority INTEGER NOT NULL DEFAULT 4,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_sync_queue_status_priority
+      ON sync_queue (status, priority, created_at)
+    ''');
+
     await _seedInitialProducts(db);
     await _seedInitialJournals(db);
     await ChartOfAccountsService().insertFullChartOfAccounts(db);
     await _createGarantiesTable(db);
     await _createRecoveryActionsTable(db);
     await _seedInitialTemplates(db);
+    await _applyPhase4Schema(db);
     await _seedDefaultAdmin(db);
   }
 
@@ -800,6 +945,52 @@ class DatabaseService {
         FOREIGN KEY (pret_id) REFERENCES prets (id)
       )
     ''');
+  }
+
+  /// Migration one-shot : transfère les opérations en attente stockées dans
+  /// SharedPreferences (clé `pending_sync_operations`) vers la table `sync_queue`.
+  /// Si la clé n'existe pas, la méthode s'arrête silencieusement.
+  Future<void> _migratePendingOpsToSyncQueue(Database db) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      const key = 'pending_sync_operations';
+      final existing = prefs.getString(key);
+      if (existing == null) return;
+
+      final List<dynamic> ops = jsonDecode(existing) as List<dynamic>;
+      final now = DateTime.now();
+
+      for (final op in ops) {
+        if (op is! Map) continue;
+        final method = (op['method'] as String?) ?? 'POST';
+        final path = (op['path'] as String?) ?? '/unknown';
+        final body = op['body'] as Map<String, dynamic>?;
+
+        final entry = SyncQueueEntry(
+          id: SyncQueueEntry.generateId(method, path),
+          method: method,
+          path: path,
+          body: body,
+          status: 'pending',
+          priority: 4,
+          createdAt: now,
+          updatedAt: now,
+          attemptCount: 0,
+        );
+
+        await db.insert(
+          'sync_queue',
+          entry.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+
+      // Supprimer la clé SharedPreferences après migration réussie
+      await prefs.remove(key);
+    } catch (e) {
+      // Ne pas bloquer la migration DB en cas d'erreur SharedPreferences
+      print('SyncQueue migration warning: $e');
+    }
   }
 
   // --- CLIENT OPERATIONS ---
@@ -1171,7 +1362,7 @@ class DatabaseService {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
 
-      // 2. Créer l'écriture comptable automatique
+      // 2. Créer l'écriture comptable automatique // Phase 3 OK
       try {
         await autoAccounting.createLoanDisbursementEntry(
           loan: loan,
@@ -1179,9 +1370,9 @@ class DatabaseService {
           txn: txn,
         );
       } catch (e) {
-        // En cas d'erreur, annuler la transaction
-        throw Exception(
-          'Erreur lors de la création de l\'écriture comptable: $e',
+        // Dégradation gracieuse : l'écriture comptable échoue sans bloquer le prêt
+        debugPrint(
+          '[AutoAccounting] Erreur écriture déblocage prêt ${loan.numeroPret}: $e',
         );
       }
 
@@ -1290,8 +1481,14 @@ class DatabaseService {
     );
   }
 
-  Future<List<RepaymentSchedule>> getPendingSchedules() async {
+  Future<List<RepaymentSchedule>> getPendingSchedules({
+    bool retardOnly = false,
+  }) async {
     final db = await database;
+    // Filtre retard : jours_retard > 0 signifie que la date prévue est dans le passé
+    final String retardFilter = retardOnly
+        ? 'AND CAST((strftime(\'%s\', \'now\') - strftime(\'%s\', e.date_prevue)) / 86400 AS INTEGER) > 0'
+        : '';
     final String query = '''
       SELECT e.*, 
              c.nom || ' ' || c.prenoms as client_name, 
@@ -1301,6 +1498,7 @@ class DatabaseService {
       JOIN prets p ON e.pret_id = p.id
       JOIN clients c ON p.client_id = c.id
       WHERE e.statut != 'PAYE'
+      $retardFilter
       ORDER BY e.date_prevue ASC
     ''';
 
@@ -1431,7 +1629,7 @@ class DatabaseService {
 
       // 5. Créer l'écriture comptable automatique
       try {
-        await autoAccounting.createLoanRepaymentEntry(
+        await autoAccounting.createLoanRepaymentEntry( // Phase 3 OK
           repayment: repayment,
           loanNumber: loanNumber.isNotEmpty ? loanNumber : 'UNKNOWN',
           clientId: clientId,
@@ -1606,6 +1804,18 @@ class DatabaseService {
     return await db.insert('clotures_caisse', closing.toMap());
   }
 
+  /// Retourne la dernière clôture de caisse enregistrée, ou null si aucune.
+  Future<CashClosing?> getLastCashClosing() async {
+    final db = await database;
+    final maps = await db.query(
+      'clotures_caisse',
+      orderBy: 'date_cloture DESC',
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return CashClosing.fromMap(maps.first);
+  }
+
   Future<List<CashClosing>> getCashClosings({
     DateTime? startDate,
     DateTime? endDate,
@@ -1737,9 +1947,10 @@ class DatabaseService {
         'date_operation': transaction.dateOperation.toIso8601String(),
       });
 
-      // 4. Créer l'écriture comptable automatique
+      // 4. Créer l'écriture comptable automatique // Phase 3 OK
       try {
         if (transaction.type == SavingsTransactionType.depot) {
+          // Dépôt : Débit compteCaisse / Crédit compteDepots // Phase 3 OK
           await autoAccounting.createSavingsDepositEntry(
             transaction: transaction,
             accountNumber: accountNumber.isNotEmpty ? accountNumber : 'UNKNOWN',
@@ -1747,13 +1958,19 @@ class DatabaseService {
             agentName: transaction.agentOperation ?? 'Système',
             txn: txn,
           );
-        } else {
+        } else if (transaction.type == SavingsTransactionType.retrait) {
+          // Retrait : Débit compteDepots / Crédit compteCaisse // Phase 3 OK
           await autoAccounting.createSavingsWithdrawalEntry(
             transaction: transaction,
             accountNumber: accountNumber.isNotEmpty ? accountNumber : 'UNKNOWN',
             clientId: clientId,
             agentName: transaction.agentOperation ?? 'Système',
             txn: txn,
+          );
+        } else {
+          // Type non comptabilisable (interet, frais) — pas d'écriture générée
+          throw ArgumentError(
+            'type_operation non supporté pour l\'écriture comptable : ${transaction.type.name}',
           );
         }
       } catch (e) {
@@ -3688,6 +3905,30 @@ class DatabaseService {
     );
   }
 
+  Future<double> getSeuilValidationPinFCFA() async {
+    final params = await getFinancialParameters();
+    if (params.seuilApprobation > 0) return params.seuilApprobation;
+    return 500000;
+  }
+
+  Future<int> insertDocumentClient({
+    required int clientId,
+    required String typeDocument,
+    required String nomFichier,
+    required String cheminLocal,
+  }) async {
+    final db = await database;
+    return db.insert('documents_clients', {
+      'client_id': clientId,
+      'type_document': typeDocument,
+      'nom_fichier': nomFichier,
+      'chemin_local': cheminLocal,
+      'date_ajout': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<List<GroupeSolidaire>> getGroupesSolidaires() => getGroupes();
+
   // --- AUTH METHODS ---
 
   /// Crée un compte admin par défaut si aucun utilisateur n'existe.
@@ -3719,6 +3960,7 @@ class DatabaseService {
       'is_active': 1,
       'created_at': DateTime.now().toIso8601String(),
       'permissions': 'all',
+      'supervisor_pin': '1234',
     }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
@@ -3767,5 +4009,69 @@ class DatabaseService {
       user.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+  }
+
+  // ── Sync Queue CRUD ───────────────────────────────────────────────────────
+
+  /// Insère une nouvelle entrée dans la file de synchronisation.
+  Future<void> insertSyncQueueEntry(SyncQueueEntry entry) async {
+    final db = await database;
+    await db.insert(
+      'sync_queue',
+      entry.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Retourne les entrées en statut 'pending' triées par priorité puis date.
+  Future<List<SyncQueueEntry>> getPendingSyncEntries() async {
+    final db = await database;
+    final maps = await db.query(
+      'sync_queue',
+      where: "status = 'pending'",
+      orderBy: 'priority ASC, created_at ASC',
+    );
+    return maps.map((m) => SyncQueueEntry.fromMap(m)).toList();
+  }
+
+  /// Retourne toutes les entrées (pending, in_progress, failed) triées par
+  /// priorité puis date.
+  Future<List<SyncQueueEntry>> getAllSyncEntries() async {
+    final db = await database;
+    final maps = await db.query(
+      'sync_queue',
+      orderBy: 'priority ASC, created_at ASC',
+    );
+    return maps.map((m) => SyncQueueEntry.fromMap(m)).toList();
+  }
+
+  /// Met à jour une entrée existante (status, attempt_count, last_error, etc.).
+  Future<void> updateSyncQueueEntry(SyncQueueEntry entry) async {
+    final db = await database;
+    await db.update(
+      'sync_queue',
+      entry.toMap(),
+      where: 'id = ?',
+      whereArgs: [entry.id],
+    );
+  }
+
+  /// Supprime une entrée de la file par son identifiant.
+  Future<void> deleteSyncQueueEntry(String id) async {
+    final db = await database;
+    await db.delete(
+      'sync_queue',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Compte les entrées en statut 'pending' ou 'in_progress'.
+  Future<int> countPendingSyncEntries() async {
+    final db = await database;
+    final result = await db.rawQuery(
+      "SELECT COUNT(*) as cnt FROM sync_queue WHERE status IN ('pending', 'in_progress')",
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
   }
 }

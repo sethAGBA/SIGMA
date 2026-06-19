@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import '../../core/services/database_service.dart';
 import '../../models/loan_request_model.dart';
+import '../../models/agent_model.dart';
+import '../../models/agency_model.dart';
 import '../../core/theme/app_colors.dart';
 import 'loan_request_form_dialog.dart';
 import 'loan_request_detail_dialog.dart';
@@ -19,11 +21,33 @@ class _LoanRequestListPageState extends State<LoanRequestListPage> {
   String? _selectedStatus;
   String? _selectedAgent;
   String? _selectedAgency;
+  List<Agent> _agents = [];
+  List<Agency> _agencies = [];
 
   @override
   void initState() {
     super.initState();
+    _loadFilterOptions();
     _refreshRequests();
+  }
+
+  Future<void> _loadFilterOptions() async {
+    final agents = await DatabaseService().getAgents();
+    final agencies = await DatabaseService().getAgencies();
+    if (mounted) {
+      setState(() {
+        _agents = agents.where((a) => a.isActive).toList();
+        _agencies = agencies.where((a) => a.isActive).toList();
+        if (_selectedAgency != null &&
+            !_agencies.any((a) => a.id == _selectedAgency)) {
+          _selectedAgency = null;
+        }
+        if (_selectedAgent != null &&
+            !_agents.any((a) => a.id == _selectedAgent)) {
+          _selectedAgent = null;
+        }
+      });
+    }
   }
 
   void _refreshRequests() {
@@ -225,16 +249,14 @@ class _LoanRequestListPageState extends State<LoanRequestListPage> {
                   child: _buildFilterDropdown(
                     _selectedAgency,
                     'Agence',
-                    [
-                      const DropdownMenuItem(
-                        value: 'A1',
-                        child: Text('Agence Centrale'),
-                      ),
-                      const DropdownMenuItem(
-                        value: 'A2',
-                        child: Text('Agence Nord'),
-                      ),
-                    ],
+                    _agencies
+                        .map(
+                          (a) => DropdownMenuItem(
+                            value: a.id,
+                            child: Text(a.name),
+                          ),
+                        )
+                        .toList(),
                     (v) => setState(() => _selectedAgency = v),
                   ),
                 ),
@@ -243,16 +265,14 @@ class _LoanRequestListPageState extends State<LoanRequestListPage> {
                   child: _buildFilterDropdown(
                     _selectedAgent,
                     'Agent de crédit',
-                    [
-                      const DropdownMenuItem(
-                        value: 'G1',
-                        child: Text('Jean KOUASSI'),
-                      ),
-                      const DropdownMenuItem(
-                        value: 'G2',
-                        child: Text('Marie DIALLO'),
-                      ),
-                    ],
+                    _agents
+                        .map(
+                          (a) => DropdownMenuItem(
+                            value: a.id,
+                            child: Text('${a.firstName} ${a.lastName}'),
+                          ),
+                        )
+                        .toList(),
                     (v) => setState(() => _selectedAgent = v),
                   ),
                 ),

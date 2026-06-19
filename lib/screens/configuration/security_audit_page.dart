@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/utils/audit_field_utils.dart';
 import '../../models/audit_log_model.dart';
 import 'package:intl/intl.dart';
 
@@ -77,7 +79,7 @@ class _SecurityAuditPageState extends State<SecurityAuditPage>
           await DatabaseService().insertAuditLog(
             AuditLog(
               id: DateTime.now().millisecondsSinceEpoch.toString(),
-              username: 'Admin', // Static for now
+              username: auditFieldValue(AuthService().currentUsername),
               action: 'EXPORT_DB',
               details:
                   'Exportation manuelle de la base de données vers Téléchargements',

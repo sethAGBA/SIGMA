@@ -25,6 +25,8 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   late TextEditingController _docsController;
   late TextEditingController _feesController;
   late TextEditingController _insuranceController;
+  late TextEditingController _tauxAssuranceController;
+  late TextEditingController _dureeMaxDiffereController;
 
   // Credit specific
   CreditCategory? _creditCategory;
@@ -65,6 +67,12 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     _feesController = TextEditingController(text: p?.fraisCommissions);
     _insuranceController = TextEditingController(
       text: p?.assurancesObligatoires,
+    );
+    _tauxAssuranceController = TextEditingController(
+      text: p?.tauxAssurance?.toString() ?? '0',
+    );
+    _dureeMaxDiffereController = TextEditingController(
+      text: p?.dureeMaxDiffereCapitalMois?.toString() ?? '0',
     );
 
     _creditCategory = p?.creditCategory ?? CreditCategory.individuel;
@@ -112,6 +120,8 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     _docsController.dispose();
     _feesController.dispose();
     _insuranceController.dispose();
+    _tauxAssuranceController.dispose();
+    _dureeMaxDiffereController.dispose();
     _minAmountController.dispose();
     _maxAmountController.dispose();
     _minDurationController.dispose();
@@ -152,6 +162,12 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
             : null,
         modeCalculInteret: _type == ProductType.credit ? _calcMode : null,
         frequenceRemboursement: _type == ProductType.credit ? _frequency : null,
+        tauxAssurance: _type == ProductType.credit
+            ? double.tryParse(_tauxAssuranceController.text)
+            : null,
+        dureeMaxDiffereCapitalMois: _type == ProductType.credit && _differePossible
+            ? int.tryParse(_dureeMaxDiffereController.text)
+            : null,
         differePossible: _type == ProductType.credit ? _differePossible : false,
         secteursEligibles: _type == ProductType.credit
             ? _sectorsController.text
@@ -456,6 +472,27 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
             ),
           ],
         ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _tauxAssuranceController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Taux d\'assurance',
+            border: OutlineInputBorder(),
+            suffixText: '%/an',
+          ),
+        ),
+        if (_differePossible) ...[
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _dureeMaxDiffereController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Durée max différé capital (mois)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         const Text(
           'Spécificités métier',

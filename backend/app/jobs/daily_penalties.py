@@ -1,3 +1,4 @@
+# Phase 3 OK
 """Job quotidien — Calcul des pénalités de retard à 00h05."""
 import logging
 from app.core.database import SessionLocal

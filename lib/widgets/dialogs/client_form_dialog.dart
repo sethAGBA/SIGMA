@@ -2,11 +2,31 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:io';
 import 'dart:math';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+import 'package:intl/intl.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/client_api_service.dart';
 import '../../core/utils/dialog_utils.dart';
 import '../../models/client_model.dart';
+import '../../models/groupe_solidaire_model.dart';
+import '../../models/produit_financier_model.dart';
+import '../../models/savings_account_model.dart';
+
+class _PendingKycDocument {
+  final String name;
+  final int sizeBytes;
+  final String sourcePath;
+
+  const _PendingKycDocument({
+    required this.name,
+    required this.sizeBytes,
+    required this.sourcePath,
+  });
+}
 
 class ClientFormDialog extends StatefulWidget {
   final Client? client; // null = nouveau client, non-null = édition
@@ -62,8 +82,11 @@ class _ClientFormDialogState extends State<ClientFormDialog> {
   final _refTel2Controller = TextEditingController();
   final _refRelation2Controller = TextEditingController();
   bool _cautionSolidaireActive = false;
+  int? _selectedGroupeId;
+  List<GroupeSolidaire> _groupes = [];
 
-  // Step 5: Documents (simplified - paths only for now)
+  // Step 5: Documents KYC
+  final List<_PendingKycDocument> _kycFiles = [];
   String? _documentCNIPath;
   String? _documentJustifDomicilePath;
   String? _photoCommercePath;
@@ -85,9 +108,104 @@ class _ClientFormDialogState extends State<ClientFormDialog> {
   @override
   void initState() {
     super.initState();
+    _loadGroupes();
     if (_isEditing) {
       _loadClientData();
     }
+  }
+
+  Future<void> _loadGroupes() async {
+    final groupes = await DatabaseService().getGroupesSolidaires();
+    if (mounted) setState(() => _groupes = groupes);
+  }
+
+  Future<void> _afterClientCreated(int clientId) async {
+    final db = DatabaseService();
+
+    final epargneProducts = await db.getProduits(type: ProductType.epargne);
+    final obligatoire = epargneProducts
+        .where((p) => p.savingsCategory == SavingsCategory.obligatoire)
+        .toList();
+    if (obligatoire.isNotEmpty) {
+      final produit = obligatoire.first;
+      final month = DateFormat('yyyyMM').format(DateTime.now());
+      await db.insertSavingsAccount(
+        SavingsAccount(
+          clientId: clientId,
+          produitId: produit.id!,
+          numeroCompte: 'CEP-$clientId-$month',
+          statut: SavingsAccountStatus.actif,
+          dateOuverture: DateTime.now(),
+          tauxInteretApplique: produit.tauxInteret,
+        ),
+      );
+      _epargneObligatoireOuverte = true;
+    }
+
+    if (_selectedGroupeId != null) {
+      await db.addClientToGroup(clientId, _selectedGroupeId!);
+    }
+
+    if (_kycFiles.isNotEmpty) {
+      final appDir = await getApplicationDocumentsDirectory();
+      final kycDir = Directory(p.join(appDir.path, 'kyc', clientId.toString()));
+      if (!await kycDir.exists()) await kycDir.create(recursive: true);
+
+      for (final doc in _kycFiles) {
+        final destPath = p.join(kycDir.path, doc.name);
+        await File(doc.sourcePath).copy(destPath);
+        await db.insertDocumentClient(
+          clientId: clientId,
+          typeDocument: 'kyc',
+          nomFichier: doc.name,
+          cheminLocal: destPath,
+        );
+      }
+    }
+  }
+
+  Future<void> _pickKycDocument() async {
+    if (_kycFiles.length >= 5) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Maximum 5 documents KYC.')),
+        );
+      }
+      return;
+    }
+
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final file = result.files.first;
+    if (file.path == null) return;
+    if (file.size > 10 * 1024 * 1024) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Fichier trop volumineux (max 10 Mo).')),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _kycFiles.add(
+        _PendingKycDocument(
+          name: file.name,
+          sizeBytes: file.size,
+          sourcePath: file.path!,
+        ),
+      );
+    });
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes o';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} Ko';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} Mo';
   }
 
   void _loadClientData() {
@@ -364,11 +482,19 @@ class _ClientFormDialogState extends State<ClientFormDialog> {
       if (_isEditing) {
         await ClientApiService().updateClient(clientData);
       } else {
-        await ClientApiService().insertClient(clientData);
+        final clientId = await ClientApiService().insertClient(clientData);
+        await _afterClientCreated(clientId);
       }
 
       if (mounted) {
         DialogUtils.hideLoadingDialog(context);
+        if (!_isEditing && _epargneObligatoireOuverte) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Compte épargne obligatoire ouvert automatiquement.'),
+            ),
+          );
+        }
         Navigator.of(context).pop(true);
       }
     } catch (e) {
@@ -1298,6 +1424,29 @@ class _ClientFormDialogState extends State<ClientFormDialog> {
             setState(() => _cautionSolidaireActive = value);
           },
         ),
+        if (_groupes.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          DropdownButtonFormField<int?>(
+            value: _selectedGroupeId,
+            decoration: const InputDecoration(
+              labelText: 'Groupe solidaire (optionnel)',
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              const DropdownMenuItem<int?>(
+                value: null,
+                child: Text('Aucun groupe'),
+              ),
+              ..._groupes.map(
+                (g) => DropdownMenuItem<int?>(
+                  value: g.id,
+                  child: Text('${g.nom} (${g.code})'),
+                ),
+              ),
+            ],
+            onChanged: (v) => setState(() => _selectedGroupeId = v),
+          ),
+        ],
       ],
     );
   }
@@ -1314,30 +1463,32 @@ class _ClientFormDialogState extends State<ClientFormDialog> {
             color: Theme.of(context).colorScheme.primary,
           ),
         ),
-        const SizedBox(height: 20),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                const Icon(Icons.info_outline, size: 48, color: Colors.blue),
-                const SizedBox(height: 12),
-                Text(
-                  'Upload de documents',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'La fonctionnalité d\'upload de documents sera implémentée prochainement. '
-                  'Pour l\'instant, vous pouvez continuer sans documents.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
+        const SizedBox(height: 12),
+        Text(
+          'PDF, JPG ou PNG — max 5 fichiers, 10 Mo chacun',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 16),
+        ..._kycFiles.map(
+          (doc) => Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: const Icon(Icons.insert_drive_file_outlined),
+              title: Text(doc.name, overflow: TextOverflow.ellipsis),
+              subtitle: Text(_formatFileSize(doc.sizeBytes)),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: () => setState(() => _kycFiles.remove(doc)),
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        OutlinedButton.icon(
+          onPressed: _pickKycDocument,
+          icon: const Icon(Icons.add),
+          label: const Text('Ajouter un document'),
+        ),
+        const SizedBox(height: 24),
         _buildDocumentItem(
           'CNI (recto/verso)',
           Icons.badge_rounded,

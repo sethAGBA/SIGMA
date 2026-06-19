@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/auth_service.dart';
 import '../../models/loan_model.dart';
 import '../../models/repayment_schedule_model.dart';
 import '../../models/repayment_model.dart';
@@ -80,7 +81,9 @@ class _RepaymentFormDialogState extends State<RepaymentFormDialog> {
         modePaiement: _selectedMode,
         numeroRecu:
             'REC-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
-        agentCollecteur: 'SYSTÈME', // À remplacer par l'utilisateur connecté
+        agentCollecteur: AuthService().currentUsername.isNotEmpty
+            ? AuthService().currentUsername
+            : 'Inconnu', // utilisateur de session
         commentaire: _commentController.text,
       );
 

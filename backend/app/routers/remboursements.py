@@ -60,7 +60,7 @@ async def enregistrer_remboursement(
 
     # Pont comptable automatique
     from app.services.accounting_service import AutomaticAccountingService
-    await AutomaticAccountingService().on_remboursement(
+    await AutomaticAccountingService().on_remboursement(  # Phase 3 OK
         remboursement_id=remboursement.id,
         part_capital=data.part_capital,
         part_interets=data.part_interets,

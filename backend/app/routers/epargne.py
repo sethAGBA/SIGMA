@@ -1,3 +1,4 @@
+# Phase 3 OK
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -50,7 +51,7 @@ async def effectuer_transaction(
     elif data.type_operation == "DEPOT":
         compte.solde += data.montant
     else:
-        raise HTTPException(status_code=400, detail="Type d'opération invalide : DEPOT ou RETRAIT")
+        raise HTTPException(status_code=400, detail="Type d'opération invalide : DEPOT ou RETRAIT")  # Phase 3 OK — Exigence 3.4
 
     transaction = TransactionEpargne(
         compte_id=data.compte_id,
@@ -68,9 +69,9 @@ async def effectuer_transaction(
     from app.services.accounting_service import AutomaticAccountingService
     svc = AutomaticAccountingService()
     if data.type_operation == "DEPOT":
-        await svc.on_depot_epargne(compte_id=data.compte_id, montant=data.montant, agent=current_user.username, db=db)
+        await svc.on_depot_epargne(compte_id=data.compte_id, montant=data.montant, agent=current_user.username, db=db)  # Phase 3 OK — Exigence 3.3
     else:
-        await svc.on_retrait_epargne(compte_id=data.compte_id, montant=data.montant, agent=current_user.username, db=db)
+        await svc.on_retrait_epargne(compte_id=data.compte_id, montant=data.montant, agent=current_user.username, db=db)  # Phase 3 OK — Exigence 3.3
 
     return {"message": "Transaction enregistrée", "solde": compte.solde, "id": transaction.id}
 

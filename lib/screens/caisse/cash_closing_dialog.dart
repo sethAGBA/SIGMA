@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/auth_service.dart';
 import '../../models/cash_closing_model.dart';
 
 class CashClosingDialog extends StatefulWidget {
@@ -24,6 +25,7 @@ class _CashClosingDialogState extends State<CashClosingDialog> {
   );
 
   bool _isLoading = true;
+  double _soldeInitial = 0.0;
   double _theoreticalBalance = 0;
   double _totalEntrees = 0;
   double _totalSorties = 0;
@@ -39,8 +41,10 @@ class _CashClosingDialogState extends State<CashClosingDialog> {
     final db = DatabaseService();
     final totals = await db.getDailyTotals(startDate: DateTime.now());
     final balance = await db.getCashBalance();
+    final lastClosing = await db.getLastCashClosing();
 
     setState(() {
+      _soldeInitial = lastClosing?.soldePhysique ?? 0.0;
       _totalEntrees = totals['entrees']!;
       _totalSorties = totals['sorties']!;
       _theoreticalBalance = balance;
@@ -130,6 +134,8 @@ class _CashClosingDialogState extends State<CashClosingDialog> {
       ),
       child: Column(
         children: [
+          _summaryRow('Solde initial (veille)', _soldeInitial, Colors.grey),
+          const SizedBox(height: 12),
           _summaryRow('Entrées du jour', _totalEntrees, Colors.green),
           const SizedBox(height: 12),
           _summaryRow('Sorties du jour', _totalSorties, Colors.orange),
@@ -311,13 +317,24 @@ class _CashClosingDialogState extends State<CashClosingDialog> {
   void _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Guard : utilisateur connecté requis
+    if (AuthService().currentUsername.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Aucun utilisateur connecté. Veuillez vous reconnecter.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       final closing = CashClosing(
         dateCloture: DateTime.now(),
-        agentCloture: 'Agent Connecté', // À remplacer par l'admin réel
-        soldeInitial: 0.0, // À gérer si on porte le solde de la veille
+        agentCloture: AuthService().currentUsername,
+        soldeInitial: _soldeInitial,
         totalEntrees: _totalEntrees,
         totalSorties: _totalSorties,
         soldeTheorique: _theoreticalBalance,

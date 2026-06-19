@@ -115,6 +115,8 @@ class ProduitFinancier {
   final int? dureeMaxMois;
   final InterestCalculationMode? modeCalculInteret;
   final RepaymentFrequency? frequenceRemboursement;
+  final double? tauxAssurance;
+  final int? dureeMaxDiffereCapitalMois;
 
   // Champs spécifiques du S.I.
   final bool differePossible;
@@ -148,6 +150,8 @@ class ProduitFinancier {
     this.dureeMaxMois,
     this.modeCalculInteret,
     this.frequenceRemboursement,
+    this.tauxAssurance,
+    this.dureeMaxDiffereCapitalMois,
     this.differePossible = false,
     this.secteursEligibles,
     this.materielFinancable,
@@ -179,6 +183,8 @@ class ProduitFinancier {
       'duree_max_mois': dureeMaxMois,
       'mode_calcul_interet': modeCalculInteret?.name,
       'frequence_remboursement': frequenceRemboursement?.name,
+      'taux_assurance': tauxAssurance,
+      'duree_max_differe_capital_mois': dureeMaxDiffereCapitalMois,
       'differe_possible': differePossible ? 1 : 0,
       'secteurs_eligibles': secteursEligibles,
       'materiel_financable': materielFinancable,
@@ -217,6 +223,10 @@ class ProduitFinancier {
       frequenceRemboursement: map['frequence_remboursement'] != null
           ? RepaymentFrequency.values.byName(map['frequence_remboursement'])
           : null,
+      tauxAssurance: map['taux_assurance'] != null
+          ? (map['taux_assurance'] as num).toDouble()
+          : null,
+      dureeMaxDiffereCapitalMois: map['duree_max_differe_capital_mois'],
       differePossible: (map['differe_possible'] ?? 0) == 1,
       secteursEligibles: map['secteurs_eligibles'],
       materielFinancable: map['materiel_financable'],

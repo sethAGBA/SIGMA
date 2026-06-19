@@ -44,7 +44,7 @@ async def create_pret(
 
     # Déclencher le pont comptable automatique
     from app.services.accounting_service import AutomaticAccountingService
-    await AutomaticAccountingService().on_deblocage_pret(
+    await AutomaticAccountingService().on_deblocage_pret(  # Phase 3 OK
         pret_id=pret.id,
         montant=pret.montant_initial,
         agent=current_user.username,

@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/utils/audit_field_utils.dart';
 import '../../models/cash_operation_model.dart';
 
 class CashMiscellaneousDialog extends StatefulWidget {
@@ -313,7 +315,7 @@ class _CashMiscellaneousDialogState extends State<CashMiscellaneousDialog> {
         'reference_externe': _referenceController.text.isNotEmpty
             ? _referenceController.text
             : null,
-        'agent_operation': 'Admin', // To be replaced by auth service
+        'agent_operation': auditFieldValue(AuthService().currentUsername),
         'date_operation': DateTime.now().toIso8601String(),
         'mode_paiement': 'ESPECES', // Default for cash desk operations
       });
