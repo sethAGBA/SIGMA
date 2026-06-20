@@ -22,8 +22,35 @@ async def enregistrer_remboursement(
     if not pret:
         raise HTTPException(status_code=404, detail="Prêt introuvable")
 
-    # Générer un numéro de reçu unique
-    numero_recu = f"REC-{datetime.utcnow().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+    if data.numero_recu:
+        existing = (
+            db.query(Remboursement)
+            .filter(Remboursement.numero_recu == data.numero_recu)
+            .first()
+        )
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "server_payload": {
+                        "id": existing.id,
+                        "numero_recu": existing.numero_recu,
+                        "montant_total": existing.montant_total,
+                        "pret_id": existing.pret_id,
+                    },
+                    "server_updated_at": (
+                        existing.date_paiement.isoformat()
+                        if existing.date_paiement
+                        else None
+                    ),
+                },
+            )
+
+    # Générer un numéro de reçu unique si absent
+    numero_recu = data.numero_recu or (
+        f"REC-{datetime.utcnow().strftime('%Y%m%d')}-"
+        f"{str(uuid.uuid4())[:8].upper()}"
+    )
 
     remboursement = Remboursement(
         pret_id=data.pret_id,

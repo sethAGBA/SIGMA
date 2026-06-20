@@ -66,6 +66,7 @@ void main() {
       await addColumnIfNotExists(db, 'produits_financiers', 'taux_assurance', 'REAL');
       await addColumnIfNotExists(db, 'produits_financiers', 'duree_max_differe_capital_mois', 'INTEGER');
       await addColumnIfNotExists(db, 'prets', 'mois_differe_capital', 'INTEGER DEFAULT 0');
+      await addColumnIfNotExists(db, 'prets', 'contrat_signe', 'INTEGER DEFAULT 0');
       await addColumnIfNotExists(db, 'comptes_epargne', 'date_echeance_terme', 'TEXT');
       await addColumnIfNotExists(db, 'comptes_epargne', 'taux_penalite_rupture_ant', 'REAL');
 
@@ -91,6 +92,7 @@ void main() {
 
     final pretsInfo = await db.rawQuery('PRAGMA table_info(prets)');
     expect(pretsInfo.any((r) => r['name'] == 'mois_differe_capital'), isTrue);
+    expect(pretsInfo.any((r) => r['name'] == 'contrat_signe'), isTrue);
 
     final comptesInfo = await db.rawQuery('PRAGMA table_info(comptes_epargne)');
     expect(comptesInfo.any((r) => r['name'] == 'date_echeance_terme'), isTrue);

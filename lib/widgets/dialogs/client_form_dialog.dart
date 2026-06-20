@@ -5,11 +5,13 @@ import 'package:flutter/services.dart';
 import 'dart:io';
 import 'dart:math';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:intl/intl.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/client_api_service.dart';
+import '../../core/services/location_service.dart';
 import '../../core/utils/dialog_utils.dart';
 import '../../models/client_model.dart';
 import '../../models/groupe_solidaire_model.dart';
@@ -121,6 +123,22 @@ class _ClientFormDialogState extends State<ClientFormDialog> {
 
   Future<void> _afterClientCreated(int clientId) async {
     final db = DatabaseService();
+
+    // Renommer le fichier photo temporaire avec le vrai clientId
+    if (_photoPath != null && File(_photoPath!).existsSync()) {
+      final appDir = await getApplicationDocumentsDirectory();
+      final photosDir = Directory(p.join(appDir.path, 'photos'));
+      if (!await photosDir.exists()) await photosDir.create(recursive: true);
+      final finalPath = p.join(photosDir.path, '$clientId.jpg');
+      await File(_photoPath!).copy(finalPath);
+      // Supprimer le fichier temp si différent
+      if (_photoPath != finalPath) {
+        try {
+          await File(_photoPath!).delete();
+        } catch (_) {}
+      }
+      _photoPath = finalPath;
+    }
 
     final epargneProducts = await db.getProduits(type: ProductType.epargne);
     final obligatoire = epargneProducts
@@ -985,6 +1003,8 @@ class _ClientFormDialogState extends State<ClientFormDialog> {
 
   Widget _buildPhotoSelector() {
     final theme = Theme.of(context);
+    final bool isWindows = Platform.isWindows;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1010,7 +1030,7 @@ class _ClientFormDialogState extends State<ClientFormDialog> {
               child: _photoPath != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.network(_photoPath!, fit: BoxFit.cover),
+                      child: Image.file(File(_photoPath!), fit: BoxFit.cover),
                     )
                   : Icon(
                       Icons.person_rounded,
@@ -1024,33 +1044,77 @@ class _ClientFormDialogState extends State<ClientFormDialog> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Capture photo à venir')),
-                    );
-                  },
-                  icon: const Icon(Icons.camera_alt_rounded),
-                  label: const Text('Prendre une photo'),
+                Tooltip(
+                  message: isWindows
+                      ? 'Caméra non disponible sur ce poste'
+                      : '',
+                  child: ElevatedButton.icon(
+                    onPressed: isWindows
+                        ? null
+                        : () => _pickPhoto(ImageSource.camera),
+                    icon: const Icon(Icons.camera_alt_rounded),
+                    label: const Text('Prendre une photo'),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Sélection galerie à venir'),
-                      ),
-                    );
-                  },
+                  onPressed: () => _pickPhoto(ImageSource.gallery),
                   icon: const Icon(Icons.photo_library_rounded),
-                  label: const Text('Choisir dans la galerie'),
+                  label: const Text('Choisir depuis la galerie'),
                 ),
+                if (_photoPath != null) ...[
+                  const SizedBox(height: 4),
+                  TextButton.icon(
+                    onPressed: () => setState(() => _photoPath = null),
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    label: const Text(
+                      'Supprimer',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ],
               ],
             ),
           ],
         ),
       ],
     );
+  }
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: source,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+      if (image == null) return;
+
+      // Copier dans {appDocDir}/photos/ avec un nom temporaire
+      final appDir = await getApplicationDocumentsDirectory();
+      final photosDir = Directory(p.join(appDir.path, 'photos'));
+      if (!await photosDir.exists()) await photosDir.create(recursive: true);
+
+      final ext = p.extension(image.path).isEmpty
+          ? '.jpg'
+          : p.extension(image.path);
+      final tempName =
+          'photo_tmp_${DateTime.now().millisecondsSinceEpoch}$ext';
+      final destPath = p.join(photosDir.path, tempName);
+      await File(image.path).copy(destPath);
+
+      if (mounted) {
+        setState(() => _photoPath = destPath);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors de la sélection : $e')),
+        );
+      }
+    }
   }
 
   Widget _buildContactStep() {
@@ -1144,10 +1208,22 @@ class _ClientFormDialogState extends State<ClientFormDialog> {
             ),
             const SizedBox(width: 12),
             IconButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Récupération GPS à venir')),
-                );
+              onPressed: () async {
+                final pos = await LocationService().getCurrentPosition();
+                if (!mounted) return;
+                if (pos != null) {
+                  setState(() {
+                    _latitudeController.text = pos.latitude.toStringAsFixed(6);
+                    _longitudeController.text = pos.longitude.toStringAsFixed(6);
+                  });
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Position GPS indisponible'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
               },
               icon: const Icon(Icons.my_location_rounded),
               tooltip: 'Ma position',

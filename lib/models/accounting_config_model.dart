@@ -35,9 +35,29 @@ class AccountingConfiguration {
     this.compteProduitsFinanciers = '77',
   });
 
-  // Factory constructor for default configuration (SYSCOHADA)
+  // Factory constructor for default configuration (SYSCOHADA legacy)
   factory AccountingConfiguration.defaultConfig() {
     return AccountingConfiguration();
+  }
+
+  /// Preset RCSSFD aligné sur le backend Python (501/530/521/701/703/602).
+  factory AccountingConfiguration.rcssfdDefault() {
+    return AccountingConfiguration(
+      comptePrets: '501',
+      compteCaisse: '530',
+      compteInterets: '701',
+      comptePenalites: '703',
+      compteInteretsCourusPrets: '5021',
+      compteDotationProvisions: '687',
+      compteDepreciationPrets: '591',
+      compteDepots: '521',
+      compteInteretsAcquisEpargne: '602',
+      compteChargeInteretEpargne: '602',
+      compteResultatExercice: '131',
+      compteBanque: '5311',
+      compteVenteServices: '702',
+      compteProduitsFinanciers: '76',
+    );
   }
 
   // Create from Map (key-value pairs from DB)

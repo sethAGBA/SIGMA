@@ -4,8 +4,11 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../../models/loan_request_model.dart';
 import '../../models/par_stats_model.dart';
 import '../../models/reporting/monthly_report_model.dart';
+import 'database_service.dart';
+import 'institution_pdf_branding.dart';
 
 class PdfExportService {
   final currencyFormat = NumberFormat.currency(
@@ -14,6 +17,119 @@ class PdfExportService {
     locale: 'fr_FR',
   );
   final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+
+  Future<void> exportLoanContract(LoanRequest request) async {
+    final client = request.client;
+    final produit = request.produit;
+    final clientName = client?.nomComplet ?? 'Client #${request.clientId}';
+    final produitName = produit?.nom ?? 'Produit #${request.produitId}';
+    final tauxNominal = produit?.tauxInteret ?? 0;
+    final dateStr = DateFormat('dd/MM/yyyy').format(DateTime.now());
+    final legal = await DatabaseService().getLegalInformation();
+    final branding = InstitutionPdfBranding(
+      legal: legal,
+      documentTitle: 'CONTRAT DE PRÊT',
+      subtitle: 'Date : $dateStr',
+    );
+
+    final pdf = pw.Document();
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(40),
+        build: (pw.Context context) {
+          return [
+            ...branding.buildHeader(),
+            pw.Text(
+              'Entre ${legal.raisonSociale.isNotEmpty ? legal.raisonSociale : "l\'Institution"}, '
+              'ci-après dénommée « l\'Institution », '
+              'et $clientName, ci-après dénommé(e) « l\'Emprunteur », '
+              'il est convenu ce qui suit :',
+              style: const pw.TextStyle(fontSize: 11, lineSpacing: 1.4),
+            ),
+            pw.SizedBox(height: 20),
+            _buildContractSection('Article 1 — Objet du prêt', [
+              'Produit : $produitName',
+              'Objet : ${request.objetPret}',
+              'Montant accordé : ${currencyFormat.format(request.montantDemande)}',
+              'Durée : ${request.dureeMois} mois',
+              'Fréquence de remboursement : ${request.frequenceRemboursement.label}',
+            ]),
+            pw.SizedBox(height: 16),
+            _buildContractSection('Article 2 — Conditions financières', [
+              'Taux d\'intérêt nominal : ${tauxNominal.toStringAsFixed(2)} %/an',
+              'TEG (Taux Effectif Global) : ${request.teg.toStringAsFixed(2)} %/an',
+              'Mensualité estimée : ${currencyFormat.format(request.mensualite)}',
+              'Total à rembourser : ${currencyFormat.format(request.totalARembourser)}',
+              if (request.moisDiffereCapital > 0)
+                'Différé de capital : ${request.moisDiffereCapital} mois',
+            ]),
+            pw.SizedBox(height: 16),
+            _buildContractSection('Article 3 — Engagements de l\'Emprunteur', [
+              'Rembourser les échéances aux dates convenues.',
+              'Informer l\'Institution de tout changement significatif de situation.',
+              'Respecter les garanties et conditions du produit sélectionné.',
+            ]),
+            pw.SizedBox(height: 40),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'L\'Emprunteur',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
+                    pw.SizedBox(height: 40),
+                    pw.Text(clientName),
+                    pw.Text('Date : ____/____/________'),
+                  ],
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'SIGMA Micro-Finance',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
+                    pw.SizedBox(height: 40),
+                    pw.Text('Cachet et signature'),
+                    pw.Text('Date : $dateStr'),
+                  ],
+                ),
+              ],
+            ),
+          ];
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name:
+          'Contrat_Pret_${client?.nom ?? request.clientId}_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+    );
+  }
+
+  pw.Widget _buildContractSection(String title, List<String> lines) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          title,
+          style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 8),
+        ...lines.map(
+          (line) => pw.Padding(
+            padding: const pw.EdgeInsets.only(left: 12, bottom: 4),
+            child: pw.Text('• $line', style: const pw.TextStyle(fontSize: 10)),
+          ),
+        ),
+      ],
+    );
+  }
 
   Future<void> exportPARDashboard(PARStats stats) async {
     final pdf = pw.Document();

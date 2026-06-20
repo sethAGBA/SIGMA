@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from typing import Optional
+from datetime import datetime
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.client import Client
@@ -73,7 +74,40 @@ def update_client(
     if not client:
         raise HTTPException(status_code=404, detail="Client introuvable")
 
-    for field, value in data.model_dump(exclude_unset=True).items():
+    payload = data.model_dump(exclude_unset=True)
+    client_updated_at = payload.pop("date_modification", None) or payload.pop(
+        "updated_at", None
+    )
+    if client_updated_at and client.date_creation:
+        try:
+            local_dt = datetime.fromisoformat(
+                str(client_updated_at).replace("Z", "+00:00")
+            )
+            if local_dt.tzinfo is not None:
+                local_dt = local_dt.replace(tzinfo=None)
+            server_dt = client.date_creation
+            if server_dt.tzinfo is not None:
+                server_dt = server_dt.replace(tzinfo=None)
+            if server_dt > local_dt:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "server_payload": {
+                            "id": client.id,
+                            "nom": client.nom,
+                            "prenoms": client.prenoms,
+                            "telephone": client.telephone,
+                            "statut": client.statut,
+                        },
+                        "server_updated_at": server_dt.isoformat(),
+                    },
+                )
+        except HTTPException:
+            raise
+        except (ValueError, TypeError):
+            pass
+
+    for field, value in payload.items():
         setattr(client, field, value)
 
     db.commit()

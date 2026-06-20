@@ -37,6 +37,9 @@ import '../../models/agent_stats_model.dart';
 import '../../models/agency_model.dart';
 import '../../models/accounting_account_model.dart';
 import '../../models/sync_queue_entry.dart';
+import '../../models/sync_conflict_model.dart';
+import '../../models/field_snapshot_meta_model.dart';
+import '../../models/plan_comptable_type.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting, debugPrint;
 import 'package:flutter/material.dart' show Icons, Color;
 
@@ -59,7 +62,7 @@ class DatabaseService {
   static void resetDatabaseForTesting() {
     _database = null;
   }
-  static const int _version = 30;
+  static const int _version = 32;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -232,6 +235,14 @@ class DatabaseService {
     if (oldVersion < 30) {
       await _applyPhase4Schema(db);
     }
+
+    if (oldVersion < 31) {
+      await _applyPhase5Schema(db);
+    }
+
+    if (oldVersion < 32) {
+      await _applyPhase6Schema(db);
+    }
   }
 
   Future<void> _addColumnIfNotExists(
@@ -264,6 +275,12 @@ class DatabaseService {
       db,
       'prets',
       'mois_differe_capital',
+      'INTEGER DEFAULT 0',
+    );
+    await _addColumnIfNotExists(
+      db,
+      'prets',
+      'contrat_signe',
       'INTEGER DEFAULT 0',
     );
     await _addColumnIfNotExists(
@@ -308,6 +325,112 @@ class DatabaseService {
       {'supervisor_pin': '1234'},
       where: "username = 'admin' AND (supervisor_pin IS NULL OR supervisor_pin = '')",
     );
+  }
+
+  Future<void> _applyPhase5Schema(Database db) async {
+    await _addColumnIfNotExists(
+      db,
+      'demandes_pret',
+      'latitude_visite',
+      'REAL',
+    );
+    await _addColumnIfNotExists(
+      db,
+      'demandes_pret',
+      'longitude_visite',
+      'REAL',
+    );
+    await _addColumnIfNotExists(db, 'remboursements', 'latitude', 'REAL');
+    await _addColumnIfNotExists(db, 'remboursements', 'longitude', 'REAL');
+    await _addColumnIfNotExists(
+      db,
+      'remboursements',
+      'photo_justificatif_path',
+      'TEXT',
+    );
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sync_conflicts (
+        id TEXT PRIMARY KEY,
+        sync_queue_id TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT,
+        local_payload TEXT NOT NULL,
+        server_payload TEXT NOT NULL,
+        local_updated_at TEXT,
+        server_updated_at TEXT,
+        resolution TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS field_snapshot_meta (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        agent_id TEXT NOT NULL,
+        snapshot_date TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        client_count INTEGER DEFAULT 0,
+        schedule_count INTEGER DEFAULT 0,
+        request_count INTEGER DEFAULT 0
+      )
+    ''');
+  }
+
+  Future<void> _applyPhase6Schema(Database db) async {
+    final existing = await db.query(
+      'configurations',
+      where: 'key = ?',
+      whereArgs: ['plan_comptable_type'],
+    );
+    if (existing.isEmpty) {
+      await db.insert('configurations', {
+        'key': 'plan_comptable_type',
+        'value': PlanComptableType.syscohada.key,
+      });
+    }
+  }
+
+  Future<void> _seedPhase6Defaults(Database db) async {
+    await db.insert('configurations', {
+      'key': 'plan_comptable_type',
+      'value': PlanComptableType.rcssfd.key,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+    final config = AccountingConfiguration.rcssfdDefault();
+    final batch = db.batch();
+    config.toMap().forEach((key, value) {
+      batch.insert('configurations', {
+        'key': key,
+        'value': value,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    });
+    await batch.commit(noResult: true);
+  }
+
+  Future<PlanComptableType> getPlanComptableType() async {
+    final db = await database;
+    final maps = await db.query(
+      'configurations',
+      where: 'key = ?',
+      whereArgs: ['plan_comptable_type'],
+    );
+    if (maps.isEmpty) return PlanComptableType.syscohada;
+    return PlanComptableType.fromKey(maps.first['value'] as String?);
+  }
+
+  /// Bascule le plan comptable et réinitialise les comptes + mapping automatique.
+  Future<void> switchPlanComptable(PlanComptableType type) async {
+    final db = await database;
+    await ChartOfAccountsService().reseedChartOfAccounts(db, type);
+    final config = type == PlanComptableType.rcssfd
+        ? AccountingConfiguration.rcssfdDefault()
+        : AccountingConfiguration.defaultConfig();
+    await saveAccountingConfig(config);
+    await db.insert('configurations', {
+      'key': 'plan_comptable_type',
+      'value': type.key,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -740,11 +863,16 @@ class DatabaseService {
 
     await _seedInitialProducts(db);
     await _seedInitialJournals(db);
-    await ChartOfAccountsService().insertFullChartOfAccounts(db);
+    await ChartOfAccountsService().insertFullChartOfAccounts(
+      db,
+      type: PlanComptableType.rcssfd,
+    );
     await _createGarantiesTable(db);
     await _createRecoveryActionsTable(db);
     await _seedInitialTemplates(db);
     await _applyPhase4Schema(db);
+    await _applyPhase5Schema(db);
+    await _seedPhase6Defaults(db);
     await _seedDefaultAdmin(db);
   }
 
@@ -1280,6 +1408,16 @@ class DatabaseService {
     );
   }
 
+  Future<void> updateLoanRequestPhotos(int id, String photosVisite) async {
+    final db = await database;
+    await db.update(
+      'demandes_pret',
+      {'photos_visite': photosVisite},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   Future<List<LoanRequest>> getLoanRequests({String? status}) async {
     final db = await database;
     String? where;
@@ -1645,6 +1783,16 @@ class DatabaseService {
 
       return id;
     });
+  }
+
+  Future<void> updateRepaymentPhotoPath(int id, String path) async {
+    final db = await database;
+    await db.update(
+      'remboursements',
+      {'photo_justificatif_path': path},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   Future<List<Map<String, dynamic>>> getGlobalRepaymentHistory() async {
@@ -4066,12 +4214,77 @@ class DatabaseService {
     );
   }
 
-  /// Compte les entrées en statut 'pending' ou 'in_progress'.
+  /// Compte les entrées en statut 'pending', 'in_progress' ou 'conflict'.
   Future<int> countPendingSyncEntries() async {
     final db = await database;
     final result = await db.rawQuery(
-      "SELECT COUNT(*) as cnt FROM sync_queue WHERE status IN ('pending', 'in_progress')",
+      "SELECT COUNT(*) as cnt FROM sync_queue WHERE status IN ('pending', 'in_progress', 'conflict')",
     );
     return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  // ── Sync Conflicts CRUD ─────────────────────────────────────────────────────
+
+  Future<void> insertSyncConflict(SyncConflict conflict) async {
+    final db = await database;
+    await db.insert(
+      'sync_conflicts',
+      conflict.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<SyncConflict>> getPendingSyncConflicts() async {
+    final db = await database;
+    final maps = await db.query(
+      'sync_conflicts',
+      where: "resolution = 'pending'",
+      orderBy: 'created_at ASC',
+    );
+    return maps.map((m) => SyncConflict.fromMap(m)).toList();
+  }
+
+  Future<void> updateSyncConflict(SyncConflict conflict) async {
+    final db = await database;
+    await db.update(
+      'sync_conflicts',
+      conflict.toMap(),
+      where: 'id = ?',
+      whereArgs: [conflict.id],
+    );
+  }
+
+  // ── Field Snapshot CRUD ─────────────────────────────────────────────────────
+
+  Future<int> insertFieldSnapshotMeta(FieldSnapshotMeta meta) async {
+    final db = await database;
+    return await db.insert('field_snapshot_meta', meta.toMap());
+  }
+
+  Future<FieldSnapshotMeta?> getTodaySnapshotForAgent(String agentId) async {
+    final db = await database;
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final maps = await db.query(
+      'field_snapshot_meta',
+      where: 'agent_id = ? AND snapshot_date = ?',
+      whereArgs: [agentId, today],
+      orderBy: 'created_at DESC',
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return FieldSnapshotMeta.fromMap(maps.first);
+  }
+
+  Future<FieldSnapshotMeta?> getLastSnapshotForAgent(String agentId) async {
+    final db = await database;
+    final maps = await db.query(
+      'field_snapshot_meta',
+      where: 'agent_id = ?',
+      whereArgs: [agentId],
+      orderBy: 'created_at DESC',
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return FieldSnapshotMeta.fromMap(maps.first);
   }
 }

@@ -127,7 +127,7 @@ backend/
 |---|---|
 | ~~**Mode offline terrain**~~ | ✅ `SyncService` + `ConnectivityMonitor` + `SyncSupervisorScreen` implémentés |
 | ~~**Pénalités automatiques**~~ | ✅ `PenaltyService` + `daily_penalties.py` job à 00h05 via APScheduler |
-| **Plan comptable RCSSFD** | ❌ Référentiel réglementaire non encore intégré. |
+| **Plan comptable RCSSFD** | ✅ Asset + preset 501/530/521, sélecteur SYSCOHADA/RCSSFD (v32). |
 | **APIs externes** | ❌ SMS et Mobile Money non branchés. |
 
 ---
@@ -227,7 +227,7 @@ backend/
 
 ---
 
-### Phase 4 — Fonctionnalités métier avancées
+### Phase 4 — Fonctionnalités métier avancées ✅ 100%
 
 **Produits & Prêts**
 - [x] Ajouter le champ assurance (% décès/invalidité) dans le formulaire produit
@@ -236,42 +236,42 @@ backend/
 
 **Comité de crédit**
 - [x] Validation par PIN/signature électronique pour les montants > seuil défini
-- [ ] Conditionner le déblocage à la signature du contrat PDF
+- [x] Conditionner le déblocage à la signature du contrat PDF *(checkbox obligatoire + `PdfExportService.exportLoanContract()` + flag `contrat_signe`)*
 
 **Épargne**
 - [x] Bloquer les retraits sur les comptes DAT en cours de terme
 - [x] Appliquer les pénalités de rupture anticipée sur les DAT
 
 **Caisse**
-- [ ] Écran de décompte par coupures physiques (billets 10k, 5k, 2k, 1k, pièces 500...)
-- [ ] Calcul automatique de l'écart physique vs théorique par coupure
-- [ ] Validation double clé pour les transferts coffre (caissier + superviseur)
+- [x] Écran de décompte par coupures physiques (billets 10k, 5k, 2k, 1k, pièces 500...) *(`CashDenominationDialog` intégré dans `CashClosingDialog`)*
+- [x] Calcul automatique de l'écart physique vs théorique par coupure
+- [x] Validation double clé pour les transferts coffre (caissier + superviseur) *(`PinValidationDialog` dans `CashTransferDialog`)*
 
 **Clients**
 - [x] Finaliser l'upload KYC dans `ClientFormDialog` (`file_picker`, stockage local)
 - [x] Liaison groupe solidaire dynamique dans le formulaire client
 - [x] Création automatique du compte épargne obligatoire à la création du client
-- [ ] Intégration caméra pour prise de photo du client en direct (`image_picker`)
+- [x] Intégration caméra pour prise de photo du client en direct (`image_picker` — caméra + galerie)
 - [ ] Scan de CNI avec OCR (optionnel)
 
 ---
 
-### Phase 5 — Mode terrain & synchronisation
+### Phase 5 — Mode terrain & synchronisation ✅ 100%
 
-- [x] Mode offline agent terrain : verrouiller les données du matin, saisie sans réseau *(`ConnectivityMonitor` + `SyncService` implémentés)*
-- [x] File de synchronisation différée (queue locale SQLite → sync serveur le soir) *(`sync_queue` table + `flushPendingOperations()`)*
-- [ ] Résolution de conflits lors de la resynchronisation (last-write-wins ou manuelle)
-- [ ] Intégration GPS (`geolocator`) pour géolocalisation des visites et collectes
-- [ ] Intégration caméra (`image_picker`) pour photos clients et pièces justificatives
+- [x] Mode offline agent terrain : verrouiller les données du matin, saisie sans réseau *(`FieldModeService` + bouton « Préparer ma tournée»)*
+- [x] File de synchronisation différée (queue locale SQLite → sync serveur le soir) *(`sync_queue` + `flushPendingOperations()` — livré Phase sync)*
+- [x] Résolution de conflits lors de la resynchronisation (last-write-wins + résolution manuelle via `ConflictResolutionDialog`)
+- [x] Intégration GPS (`geolocator`) pour géolocalisation des visites et collectes
+- [x] Intégration caméra (`image_picker`) pour photos clients et pièces justificatives *(visites prêt + justificatif remboursement)*
 
 ---
 
-### Phase 6 — Conformité réglementaire
+### Phase 6 — Conformité réglementaire *(~45% — vague 1 livrée)*
 
-- [ ] Intégrer le plan comptable RCSSFD complet (fichier `lib/assets/docs/Plan des Comptes RCSSFD.txt`)
-- [ ] Mapper/remplacer le plan comptable actuel avec les comptes RCSSFD (ex: 1011 BCEAO)
-- [ ] Vérifier la conformité de l'export Excel de la balance au format SYSCOHADA/RCSSFD (pour auditeurs externes)
-- [ ] En-têtes et pieds de page PDF dynamiques (depuis `InstitutionConfiguration` en base)
+- [x] Intégrer le plan comptable RCSSFD complet (fichier `lib/assets/docs/Plan des Comptes RCSSFD.txt`)
+- [x] Mapper/remplacer le plan comptable actuel avec les comptes RCSSFD (preset 501/530/521 + sélecteur institution)
+- [x] Export Excel/CSV de la balance au format SYSCOHADA/RCSSFD (`RegulatoryExportService`)
+- [x] En-têtes PDF dynamiques depuis `InstitutionConfiguration` (`InstitutionPdfBranding` → contrat prêt)
 - [ ] Constructeur de rapports dynamiques dans `CustomReportPage` (vraies requêtes SQL)
 - [ ] Export BCEAO/Coban (fichiers plats CSV structurés avec séparateurs spécifiques)
 - [ ] Relevés mensuels d'épargne générés automatiquement (PDF)

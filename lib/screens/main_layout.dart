@@ -50,6 +50,7 @@ import '../core/theme/app_colors.dart';
 import '../core/services/auth_service.dart';
 import '../models/user_model.dart';
 import '../widgets/sync_status_badge.dart';
+import '../widgets/field_mode_banner.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -268,6 +269,7 @@ class _MainLayoutState extends State<MainLayout> {
             badge: '3',
           ),
           const SizedBox(width: 8),
+          const FieldModeBanner(),
           const SyncStatusBadge(),
           const SizedBox(width: 24),
           _buildUserProfile(context),

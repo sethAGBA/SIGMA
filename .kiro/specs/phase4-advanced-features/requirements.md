@@ -146,3 +146,58 @@ Le modèle `ProduitFinancier` a déjà le champ `differePossible` (bool) et `ass
 2. IF aucun groupe n'existe, THE dropdown SHALL afficher le message `'Aucun groupe disponible'` et être désactivé.
 3. WHEN un groupe est sélectionné et que le client est créé, THE system SHALL insérer une entrée dans `membres_groupe` avec `client_id` et `groupe_id`.
 4. THE champ groupe SHALL être optionnel — le client peut être créé sans groupe.
+
+---
+
+### Exigence 9 : Conditionner le déblocage à la signature du contrat PDF
+
+**User Story :** En tant que chef d'agence, je veux qu'aucun prêt ne puisse être débloqué sans que le contrat signé soit confirmé dans le système, afin de garantir la traçabilité juridique de chaque engagement.
+
+#### Critères d'acceptation
+
+1. WHEN le formulaire de déblocage est affiché, THE system SHALL présenter une case à cocher « Contrat signé par le client » non cochée par défaut.
+2. WHEN l'agent tente de valider le déblocage sans cocher la case, THE system SHALL refuser la soumission et afficher le message « Veuillez confirmer la signature du contrat avant le déblocage. ».
+3. WHEN l'agent appuie sur « Générer contrat PDF », THE system SHALL appeler `PdfExportService` pour produire un contrat de prêt pré-rempli avec les données du dossier.
+4. WHEN le déblocage est confirmé avec la case cochée, THE système SHALL persister le flag `contrat_signe = true` dans la table `prets`.
+
+---
+
+### Exigence 10 : Écran de décompte par coupures physiques
+
+**User Story :** En tant que caissier, je veux saisir le décompte physique de la caisse par coupures de billets et pièces, afin d'obtenir automatiquement le solde physique sans addition manuelle.
+
+#### Critères d'acceptation
+
+1. THE `CashDenominationDialog` SHALL afficher une ligne par coupure : 10 000, 5 000, 2 000, 1 000, 500, 200, 100 FCFA.
+2. WHEN l'agent saisit une quantité pour chaque coupure, THE dialog SHALL calculer en temps réel `total = sum(quantite × valeur_coupure)`.
+3. THE dialog SHALL afficher l'écart entre le total physique calculé et le solde théorique de la caisse.
+4. WHEN l'agent valide le décompte, THE `CashClosingDialog` SHALL pré-remplir le champ « Solde Physique » avec le total calculé.
+5. THE `CashClosingDialog` SHALL proposer un bouton « Décompte par coupures » à côté du champ « Solde Physique ».
+
+---
+
+### Exigence 11 : Validation double clé pour transferts coffre
+
+**User Story :** En tant que directeur d'agence, je veux qu'un transfert entre la caisse et le coffre nécessite la validation PIN d'un superviseur en plus de l'agent caissier, afin de sécuriser les mouvements de fonds importants.
+
+#### Critères d'acceptation
+
+1. WHEN un agent valide un transfert coffre dans `CashTransferDialog`, THE system SHALL afficher `PinValidationDialog` pour demander le PIN d'un superviseur.
+2. IF le PIN superviseur est incorrect ou annulé, THE system SHALL annuler le transfert et afficher un SnackBar d'erreur.
+3. IF le PIN superviseur est valide, THE transfert SHALL être enregistré normalement.
+4. THE validation PIN SHALL utiliser le `PinValidationDialog` existant (`lib/widgets/dialogs/pin_validation_dialog.dart`).
+
+---
+
+### Exigence 12 : Intégration caméra pour photo client
+
+**User Story :** En tant qu'agent de crédit, je veux pouvoir prendre une photo du client en direct depuis l'application, afin de compléter son dossier KYC sans quitter l'écran de saisie.
+
+#### Critères d'acceptation
+
+1. THE `ClientFormDialog` SHALL proposer deux boutons dans la section photo : « Prendre une photo » et « Choisir depuis galerie ».
+2. WHEN l'agent appuie sur « Prendre une photo », THE system SHALL ouvrir la caméra via `ImagePicker().pickImage(source: ImageSource.camera)`.
+3. WHEN l'agent appuie sur « Choisir depuis galerie », THE system SHALL ouvrir le sélecteur de fichiers via `ImagePicker().pickImage(source: ImageSource.gallery)`.
+4. WHEN une image est sélectionnée, THE system SHALL la copier dans `{appDocDir}/photos/{clientId}.jpg` et stocker le chemin dans `client.photoPath`.
+5. THE `pubspec.yaml` SHALL déclarer la dépendance `image_picker: ^1.1.2`.
+6. IF `image_picker` n'est pas disponible sur la plateforme (Windows Desktop sans webcam), THE button SHALL être désactivé avec un tooltip « Caméra non disponible sur ce poste ».

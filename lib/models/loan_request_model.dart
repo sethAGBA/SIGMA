@@ -66,6 +66,8 @@ class LoanRequest {
   final String? rapportVisite;
   final String? observationsVisite;
   final String? photosVisite; // Chemins séparés par virgules
+  final double? latitudeVisite;
+  final double? longitudeVisite;
   final int scoreCalcule;
   final String? recommandationSysteme;
 
@@ -113,6 +115,8 @@ class LoanRequest {
     this.rapportVisite,
     this.observationsVisite,
     this.photosVisite,
+    this.latitudeVisite,
+    this.longitudeVisite,
     this.scoreCalcule = 0,
     this.recommandationSysteme,
     this.avisAgent,
@@ -154,6 +158,8 @@ class LoanRequest {
       'rapport_visite': rapportVisite,
       'observations_visite': observationsVisite,
       'photos_visite': photosVisite,
+      'latitude_visite': latitudeVisite,
+      'longitude_visite': longitudeVisite,
       'score_calcule': scoreCalcule,
       'recommandation_systeme': recommandationSysteme,
       'avis_agent': avisAgent,
@@ -200,6 +206,8 @@ class LoanRequest {
       rapportVisite: map['rapport_visite'],
       observationsVisite: map['observations_visite'],
       photosVisite: map['photos_visite'],
+      latitudeVisite: map['latitude_visite']?.toDouble(),
+      longitudeVisite: map['longitude_visite']?.toDouble(),
       scoreCalcule: map['score_calcule'] ?? 0,
       recommandationSysteme: map['recommandation_systeme'],
       avisAgent: map['avis_agent'],

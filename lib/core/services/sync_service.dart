@@ -15,10 +15,12 @@
 //   → Puis envoi au serveur si disponible
 //   → Si pas disponible → file de sync en attente (table sync_queue)
 
+import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'api_service.dart';
 import 'database_service.dart';
 import '../../models/sync_queue_entry.dart';
+import '../../models/sync_conflict_model.dart';
 
 class SyncService {
   static final SyncService _instance = SyncService._internal();
@@ -70,10 +72,63 @@ class SyncService {
     return DatabaseService().countPendingSyncEntries();
   }
 
-  /// Retourne toutes les entrées de la file (pending, in_progress, failed),
+  /// Retourne toutes les entrées de la file (pending, in_progress, failed, conflict),
   /// triées par priorité ASC puis created_at ASC.
   Future<List<SyncQueueEntry>> getAllEntries() async {
     return DatabaseService().getAllSyncEntries();
+  }
+
+  Future<List<SyncConflict>> getPendingConflicts() async {
+    return DatabaseService().getPendingSyncConflicts();
+  }
+
+  Future<void> resolveConflict(String conflictId, {required bool keepLocal}) async {
+    final conflicts = await DatabaseService().getPendingSyncConflicts();
+    final conflict = conflicts.firstWhere(
+      (c) => c.id == conflictId,
+      orElse: () => throw StateError('SyncConflict $conflictId introuvable'),
+    );
+
+    final entries = await DatabaseService().getAllSyncEntries();
+    SyncQueueEntry? entry;
+    for (final e in entries) {
+      if (e.id == conflict.syncQueueId) {
+        entry = e;
+        break;
+      }
+    }
+
+    if (keepLocal && entry != null) {
+      http.Response? response;
+      switch (entry.method) {
+        case 'POST':
+          response = await ApiService().post(entry.path, entry.body ?? {});
+          break;
+        case 'PUT':
+          response = await ApiService().put(entry.path, entry.body ?? {});
+          break;
+        default:
+          break;
+      }
+      if (ApiService.isSuccess(response)) {
+        await DatabaseService().updateSyncQueueEntry(
+          entry.copyWith(status: 'success', updatedAt: DateTime.now()),
+        );
+      }
+    } else if (!keepLocal) {
+      // Server wins — marquer la file comme success (cache mis à jour manuellement si besoin)
+      if (entry != null) {
+        await DatabaseService().updateSyncQueueEntry(
+          entry.copyWith(status: 'success', updatedAt: DateTime.now()),
+        );
+      }
+    }
+
+    await DatabaseService().updateSyncConflict(
+      conflict.copyWith(
+        resolution: keepLocal ? 'keep_local' : 'keep_server',
+      ),
+    );
   }
 
   /// Supprime une entrée de la file par son identifiant.
@@ -151,6 +206,23 @@ class SyncService {
             entry.copyWith(status: 'success', updatedAt: DateTime.now()),
           );
           synced++;
+        } else if (response != null && response.statusCode == 409) {
+          final conflict = _buildConflictFromResponse(entry, response);
+          await DatabaseService().insertSyncConflict(conflict);
+          await DatabaseService().updateSyncQueueEntry(
+            entry.copyWith(
+              status: 'conflict',
+              updatedAt: DateTime.now(),
+              lastError: response.body,
+            ),
+          );
+
+          if (_shouldAutoResolveKeepLocal(conflict)) {
+            await resolveConflict(conflict.id, keepLocal: true);
+            synced++;
+          } else {
+            failed++;
+          }
         } else if (response != null &&
             response.statusCode >= 400 &&
             response.statusCode < 500) {
@@ -223,6 +295,61 @@ class SyncService {
     }
 
     return SyncResult(success: failed == 0, synced: synced, failed: failed);
+  }
+
+  SyncConflict _buildConflictFromResponse(
+    SyncQueueEntry entry,
+    http.Response response,
+  ) {
+    Map<String, dynamic> serverPayload = {};
+    DateTime? serverUpdatedAt;
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        serverPayload = Map<String, dynamic>.from(
+          (decoded['server_payload'] as Map<String, dynamic>?) ?? decoded,
+        );
+        final rawDate = decoded['server_updated_at'] as String?;
+        if (rawDate != null) serverUpdatedAt = DateTime.tryParse(rawDate);
+      }
+    } catch (_) {}
+
+    final localUpdatedRaw = entry.body?['date_modification'] ??
+        entry.body?['updated_at'] ??
+        entry.updatedAt.toIso8601String();
+
+    return SyncConflict(
+      id: 'conflict-${entry.id}',
+      syncQueueId: entry.id,
+      entityType: _entityTypeFromPath(entry.path),
+      entityId: _entityIdFromPath(entry.path),
+      localPayload: entry.body ?? {},
+      serverPayload: serverPayload,
+      localUpdatedAt: DateTime.tryParse(localUpdatedRaw.toString()) ??
+          entry.updatedAt,
+      serverUpdatedAt: serverUpdatedAt,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  String _entityTypeFromPath(String path) {
+    if (path.contains('/remboursements')) return 'remboursement';
+    if (path.contains('/clients')) return 'client';
+    return 'autre';
+  }
+
+  String? _entityIdFromPath(String path) {
+    final parts = path.split('/').where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return null;
+    final last = parts.last;
+    return int.tryParse(last) != null ? last : null;
+  }
+
+  bool _shouldAutoResolveKeepLocal(SyncConflict conflict) {
+    final local = conflict.localUpdatedAt;
+    final server = conflict.serverUpdatedAt;
+    if (local == null || server == null) return false;
+    return local.isAfter(server);
   }
 }
 

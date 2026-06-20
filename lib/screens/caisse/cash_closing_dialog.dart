@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../models/cash_closing_model.dart';
+import 'cash_denomination_dialog.dart';
 
 class CashClosingDialog extends StatefulWidget {
   const CashClosingDialog({super.key});
@@ -92,7 +93,7 @@ class _CashClosingDialogState extends State<CashClosingDialog> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(Icons.lock_clock_rounded, color: AppColors.primary),
@@ -126,7 +127,7 @@ class _CashClosingDialogState extends State<CashClosingDialog> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.02) : Colors.grey[50],
+        color: isDark ? Colors.white.withValues(alpha: 0.02) : Colors.grey[50],
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isDark ? AppColors.darkDivider : Colors.grey[200]!,
@@ -193,30 +194,63 @@ class _CashClosingDialogState extends State<CashClosingDialog> {
           ),
         ),
         const SizedBox(height: 16),
-        TextFormField(
-          controller: _physicalBalanceController,
-          decoration: InputDecoration(
-            labelText: 'Solde Physique (Montant compté)',
-            prefixIcon: const Icon(Icons.payments_outlined),
-            suffixText: 'FCFA',
-            filled: true,
-            fillColor: isDark
-                ? Colors.white.withOpacity(0.05)
-                : Colors.grey[100],
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _physicalBalanceController,
+                decoration: InputDecoration(
+                  labelText: 'Solde Physique (Montant compté)',
+                  prefixIcon: const Icon(Icons.payments_outlined),
+                  suffixText: 'FCFA',
+                  filled: true,
+                  fillColor: isDark
+                      ? Colors.white.withValues(alpha: 0.05)
+                      : Colors.grey[100],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                keyboardType: TextInputType.number,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                onChanged: (value) {
+                  setState(() {
+                    _physicalBalance = double.tryParse(value) ?? 0;
+                  });
+                },
+                validator: (value) =>
+                    (value == null || value.isEmpty) ? 'Champ requis' : null,
+              ),
             ),
-          ),
-          keyboardType: TextInputType.number,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          onChanged: (value) {
-            setState(() {
-              _physicalBalance = double.tryParse(value) ?? 0;
-            });
-          },
-          validator: (value) =>
-              (value == null || value.isEmpty) ? 'Champ requis' : null,
+            const SizedBox(width: 12),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: TextButton.icon(
+                onPressed: _ouvrirDecompte,
+                icon: const Icon(Icons.calculate_outlined, size: 18),
+                label: const Text(
+                  'Décompte\npar coupures',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, height: 1.3),
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(
+                      color: AppColors.primary.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         _buildDiscrepancyBadge(),
@@ -228,7 +262,7 @@ class _CashClosingDialogState extends State<CashClosingDialog> {
             alignLabelWithHint: true,
             filled: true,
             fillColor: isDark
-                ? Colors.white.withOpacity(0.05)
+                ? Colors.white.withValues(alpha: 0.05)
                 : Colors.grey[100],
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -241,6 +275,21 @@ class _CashClosingDialogState extends State<CashClosingDialog> {
     );
   }
 
+  /// Ouvre le dialog de décompte par coupures et pré-remplit le champ solde
+  /// physique avec le résultat si l'utilisateur valide.
+  Future<void> _ouvrirDecompte() async {
+    final total = await showDialog<double>(
+      context: context,
+      builder: (_) => CashDenominationDialog(soldeTheorique: _theoreticalBalance),
+    );
+    if (total != null && mounted) {
+      setState(() {
+        _physicalBalance = total;
+        _physicalBalanceController.text = total.toStringAsFixed(0);
+      });
+    }
+  }
+
   Widget _buildDiscrepancyBadge() {
     final ecart = _ecart;
     if (ecart == 0) return const SizedBox.shrink();
@@ -251,7 +300,7 @@ class _CashClosingDialogState extends State<CashClosingDialog> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(

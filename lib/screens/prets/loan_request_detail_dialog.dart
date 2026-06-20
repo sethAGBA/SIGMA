@@ -8,6 +8,7 @@ import '../../models/repayment_schedule_model.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/loan_calculator.dart';
 import '../../widgets/dialogs/pin_validation_dialog.dart';
+import '../../core/services/pdf_export_service.dart';
 
 class LoanRequestDetailDialog extends StatefulWidget {
   final LoanRequest request;
@@ -760,44 +761,86 @@ class _LoanRequestDetailDialogState extends State<LoanRequestDetailDialog>
     }
 
     if (!mounted) return;
-    showDialog(
+
+    // Exigence 9 — Conditionner le déblocage à la signature du contrat
+    bool contratSigne = false;
+    final confirme = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmation de déblocage'),
-        content: const Text(
-          'Voulez-vous confirmer le déblocage de ce prêt ?\n\n'
-          'Cette action générera l\'échéancier réel et activera le prêt dans le portefeuille.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDlg) => AlertDialog(
+          title: const Text('Confirmation de déblocage'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Voulez-vous confirmer le déblocage de ce prêt ?\n\n'
+                'Cette action générera l\'échéancier réel et activera le prêt dans le portefeuille.',
+              ),
+              const SizedBox(height: 20),
+              CheckboxListTile(
+                value: contratSigne,
+                onChanged: (v) => setStateDlg(() => contratSigne = v ?? false),
+                title: const Text(
+                  'J\'atteste que le contrat de prêt a été signé par le client',
+                  style: TextStyle(fontSize: 13),
+                ),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () =>
+                    PdfExportService().exportLoanContract(widget.request),
+                icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                label: const Text('Générer contrat PDF'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: _isLoading
-                ? null
-                : () {
-                    Navigator.pop(context);
-                    _disburseLoan();
-                  },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler'),
             ),
-            child: _isLoading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text('Confirmer le déblocage'),
-          ),
-        ],
+            ElevatedButton(
+              onPressed: _isLoading
+                  ? null
+                  : () {
+                      if (!contratSigne) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Veuillez confirmer la signature du contrat avant le déblocage.',
+                            ),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                        return;
+                      }
+                      Navigator.pop(ctx, true);
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Confirmer le déblocage'),
+            ),
+          ],
+        ),
       ),
     );
+
+    if (confirme != true) return;
+    _disburseLoan();
   }
 
   Future<void> _disburseLoan() async {
@@ -838,6 +881,7 @@ class _LoanRequestDetailDialogState extends State<LoanRequestDetailDialog>
         agentGestionnaire: widget.request.client?.agentAffecte,
         agenceGestion: widget.request.client?.agence,
         moisDiffereCapital: widget.request.moisDiffereCapital,
+        contratSigne: true,
       );
 
       final loanId = await db.insertLoan(loan);

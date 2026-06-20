@@ -50,5 +50,6 @@ class RemboursementCreate(BaseModel):
     part_interets: float
     part_penalites: Optional[float] = 0.0
     mode_paiement: str
+    numero_recu: Optional[str] = None
     agent_collecteur: Optional[str] = None
     commentaire: Optional[str] = None

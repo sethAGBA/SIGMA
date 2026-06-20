@@ -4,8 +4,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/sync_queue_entry.dart';
+import '../../models/sync_conflict_model.dart';
 import '../../core/services/sync_service.dart';
 import '../../core/services/connectivity_monitor.dart';
+import '../../widgets/dialogs/conflict_resolution_dialog.dart';
 
 class SyncSupervisorScreen extends StatefulWidget {
   const SyncSupervisorScreen({super.key});
@@ -16,6 +18,7 @@ class SyncSupervisorScreen extends StatefulWidget {
 
 class _SyncSupervisorScreenState extends State<SyncSupervisorScreen> {
   List<SyncQueueEntry> _entries = [];
+  List<SyncConflict> _conflicts = [];
   bool _isLoading = false;
 
   @override
@@ -38,9 +41,11 @@ class _SyncSupervisorScreenState extends State<SyncSupervisorScreen> {
     setState(() => _isLoading = true);
     try {
       final entries = await SyncService().getAllEntries();
+      final conflicts = await SyncService().getPendingConflicts();
       if (mounted) {
         setState(() {
           _entries = entries;
+          _conflicts = conflicts;
           _isLoading = false;
         });
       }
@@ -139,6 +144,8 @@ class _SyncSupervisorScreenState extends State<SyncSupervisorScreen> {
         return Colors.green;
       case 'failed':
         return Colors.red;
+      case 'conflict':
+        return Colors.deepOrange;
       default:
         return Colors.grey;
     }
@@ -154,6 +161,8 @@ class _SyncSupervisorScreenState extends State<SyncSupervisorScreen> {
         return 'Succès';
       case 'failed':
         return 'Échoué';
+      case 'conflict':
+        return 'Conflit';
       default:
         return status;
     }
@@ -311,6 +320,36 @@ class _SyncSupervisorScreenState extends State<SyncSupervisorScreen> {
     );
   }
 
+  Future<void> _resolveConflict(SyncConflict conflict) async {
+    final keepLocal = await showDialog<bool>(
+      context: context,
+      builder: (_) => ConflictResolutionDialog(conflict: conflict),
+    );
+    if (keepLocal == null) return;
+    await SyncService().resolveConflict(conflict.id, keepLocal: keepLocal);
+    await _loadEntries();
+  }
+
+  Widget _buildConflictCard(SyncConflict conflict) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      color: Colors.orange.shade50,
+      child: ListTile(
+        leading: const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+        title: Text('${conflict.entityType} ${conflict.entityId ?? ''}'),
+        subtitle: Text(
+          'Local: ${conflict.localUpdatedAt?.toIso8601String() ?? '—'} | '
+          'Serveur: ${conflict.serverUpdatedAt?.toIso8601String() ?? '—'}',
+          style: const TextStyle(fontSize: 11),
+        ),
+        trailing: TextButton(
+          onPressed: () => _resolveConflict(conflict),
+          child: const Text('Résoudre'),
+        ),
+      ),
+    );
+  }
+
   // ── État vide ─────────────────────────────────────────────────────────────
 
   Widget _buildEmptyState() {
@@ -351,12 +390,37 @@ class _SyncSupervisorScreenState extends State<SyncSupervisorScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _entries.isEmpty
+          : (_entries.isEmpty && _conflicts.isEmpty)
               ? _buildEmptyState()
-              : ListView.builder(
+              : ListView(
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: _entries.length,
-                  itemBuilder: (_, index) => _buildEntryCard(_entries[index]),
+                  children: [
+                    if (_conflicts.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                        child: Text(
+                          'Conflits (${_conflicts.length})',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      ..._conflicts.map(_buildConflictCard),
+                      const Divider(height: 24),
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(16, 0, 16, 4),
+                        child: Text(
+                          'File de synchronisation',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                    ..._entries.map(_buildEntryCard),
+                  ],
                 ),
     );
   }

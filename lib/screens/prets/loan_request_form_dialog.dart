@@ -1,7 +1,12 @@
 // lib/screens/prets/loan_request_form_dialog.dart
 
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import '../../core/services/database_service.dart';
+import '../../core/services/location_service.dart';
 import '../../models/client_model.dart';
 import '../../models/produit_financier_model.dart';
 import '../../models/loan_request_model.dart';
@@ -49,6 +54,11 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
 
   // Step 7 (Visite)
   final _observationsVisiteController = TextEditingController();
+  double? _latitudeVisite;
+  double? _longitudeVisite;
+  bool _gpsUnavailable = false;
+  bool _gpsLoading = false;
+  final List<String> _visitPhotoPaths = [];
 
   // Metrics
   double _mensualite = 0;
@@ -150,6 +160,11 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
       valeurGarantie: double.tryParse(_valeurGarantieController.text),
       cautionPersonnelle: _cautionNomController.text,
       observationsVisite: _observationsVisiteController.text,
+      latitudeVisite: _latitudeVisite,
+      longitudeVisite: _longitudeVisite,
+      photosVisite: [
+        ..._visitPhotoPaths,
+      ].where((p) => p.isNotEmpty).join(','),
       documentsDossier: [
         _cniPath,
         _facturePath,
@@ -159,8 +174,87 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
       dateCreation: DateTime.now(),
     );
 
-    await DatabaseService().insertLoanRequest(request);
+    final requestId = await DatabaseService().insertLoanRequest(request);
+    await _finalizeVisitPhotos(requestId);
     if (mounted) Navigator.pop(context, true);
+  }
+
+  Future<void> _captureVisitGps() async {
+    setState(() {
+      _gpsLoading = true;
+      _gpsUnavailable = false;
+    });
+    final pos = await LocationService().getCurrentPosition();
+    if (!mounted) return;
+    setState(() {
+      _gpsLoading = false;
+      if (pos != null) {
+        _latitudeVisite = pos.latitude;
+        _longitudeVisite = pos.longitude;
+        _gpsUnavailable = false;
+      } else {
+        _gpsUnavailable = true;
+      }
+    });
+  }
+
+  Future<void> _pickVisitPhoto(ImageSource source) async {
+    if (_visitPhotoPaths.length >= 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximum 3 photos de visite')),
+      );
+      return;
+    }
+    try {
+      final image = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      if (image == null) return;
+      final file = File(image.path);
+      if (await file.length() > 5 * 1024 * 1024) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Photo trop volumineuse (max 5 Mo)')),
+          );
+        }
+        return;
+      }
+      final appDir = await getApplicationDocumentsDirectory();
+      final dir = Directory(p.join(appDir.path, 'visites', 'tmp'));
+      if (!await dir.exists()) await dir.create(recursive: true);
+      final dest = p.join(
+        dir.path,
+        'visite_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      await file.copy(dest);
+      if (mounted) setState(() => _visitPhotoPaths.add(dest));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur photo : $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _finalizeVisitPhotos(int requestId) async {
+    if (_visitPhotoPaths.isEmpty) return;
+    final appDir = await getApplicationDocumentsDirectory();
+    final finalDir = Directory(p.join(appDir.path, 'visites', '$requestId'));
+    if (!await finalDir.exists()) await finalDir.create(recursive: true);
+    final paths = <String>[];
+    for (int i = 0; i < _visitPhotoPaths.length; i++) {
+      final dest = p.join(finalDir.path, 'photo_$i.jpg');
+      await File(_visitPhotoPaths[i]).copy(dest);
+      paths.add(dest);
+    }
+    await DatabaseService().updateLoanRequestPhotos(
+      requestId,
+      paths.join(','),
+    );
   }
 
   @override
@@ -782,6 +876,7 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
   }
 
   Widget _buildVisiteStep() {
+    final isWindows = Platform.isWindows;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -803,15 +898,62 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
         ),
         const SizedBox(height: 16),
         Row(
-          children: const [
-            Icon(Icons.location_on, color: Colors.blue),
-            SizedBox(width: 8),
-            Text(
-              'Géolocalisation activée',
-              style: TextStyle(fontWeight: FontWeight.bold),
+          children: [
+            Icon(
+              _latitudeVisite != null ? Icons.location_on : Icons.location_off,
+              color: _gpsUnavailable ? Colors.orange : Colors.blue,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _gpsLoading
+                  ? const Text('Acquisition GPS en cours...')
+                  : _latitudeVisite != null
+                      ? Text(
+                          'Position : ${_latitudeVisite!.toStringAsFixed(5)}, '
+                          '${_longitudeVisite!.toStringAsFixed(5)}',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        )
+                      : Text(
+                          _gpsUnavailable
+                              ? 'GPS indisponible — la visite peut quand même être enregistrée'
+                              : 'Position non capturée',
+                          style: TextStyle(
+                            color: _gpsUnavailable ? Colors.orange : Colors.grey,
+                          ),
+                        ),
+            ),
+            TextButton.icon(
+              onPressed: _gpsLoading ? null : _captureVisitGps,
+              icon: const Icon(Icons.my_location_rounded, size: 16),
+              label: const Text('Actualiser'),
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (!isWindows)
+              OutlinedButton.icon(
+                onPressed: () => _pickVisitPhoto(ImageSource.camera),
+                icon: const Icon(Icons.camera_alt_rounded, size: 16),
+                label: const Text('Photo'),
+              ),
+            OutlinedButton.icon(
+              onPressed: () => _pickVisitPhoto(ImageSource.gallery),
+              icon: const Icon(Icons.photo_library_rounded, size: 16),
+              label: const Text('Galerie'),
+            ),
+          ],
+        ),
+        if (_visitPhotoPaths.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            '${_visitPhotoPaths.length}/3 photo(s) jointe(s)',
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+        ],
       ],
     );
   }
@@ -1048,6 +1190,7 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
                           !_formKey.currentState!.validate()))
                     return;
                   setState(() => _currentStep++);
+                  if (_currentStep == 6) _captureVisitGps();
                 } else {
                   _save();
                 }

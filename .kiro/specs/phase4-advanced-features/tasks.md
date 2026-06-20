@@ -24,7 +24,7 @@ Les 4 axes d'implémentation sont :
   - Ajouter les mêmes DDL dans `_onCreate` pour les nouvelles installations
   - _Exigences : 1.4, 3.5, 5.1, 5.2, 7.4_
 
-  - [ ]* 1.1 Écrire le test de migration v29→v30
+  - [x]* 1.1 Écrire le test de migration v29→v30
     - Vérifier que les 6 nouvelles colonnes/tables existent après migration
     - Vérifier la migration est idempotente (pas d'erreur si colonnes déjà présentes)
     - _Exigences : 1.4, 3.5, 5.1, 5.2_
@@ -144,7 +144,7 @@ Les 4 axes d'implémentation sont :
     - Si aucun produit obligatoire : pas d'exception
   - _Exigences : 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-  - [ ]* 12.1 Écrire le test unitaire pour l'auto-ouverture du compte épargne
+  - [x]* 12.1 Écrire le test unitaire pour l'auto-ouverture du compte épargne
     - Insérer un produit `SavingsCategory.obligatoire` dans une DB en mémoire
     - Créer un client → vérifier qu'un `SavingsAccount` est créé avec le bon format de numéro
     - Créer un client sans produit obligatoire → vérifier qu'aucun compte n'est créé et pas d'exception
@@ -173,6 +173,38 @@ Les 4 axes d'implémentation sont :
     - Afficher `tauxPenaliteRuptureAnt` si applicable
     - Persister ces champs via `DatabaseService().insertSavingsAccount()`
   - _Exigences : 5.1, 5.2_
+
+- [x] 18. Conditionner le déblocage à la signature du contrat PDF
+  - Dans le formulaire de déblocage (`loan_request_form_dialog.dart` ou `loan_detail_dialog.dart`) :
+    - Ajouter un `Checkbox` « Contrat signé par le client » requis avant validation
+    - Si la case n'est pas cochée au moment du déblocage, afficher un SnackBar et interrompre
+    - Ajouter un bouton « Générer contrat PDF » → appeler `PdfExportService` pour générer le contrat de prêt pré-rempli
+    - Persister le flag `contrat_signe` (boolean) dans la table `prets`
+  - _Exigences : 4.1 (comité de crédit)_
+
+- [x] 19. Écran de décompte par coupures physiques
+  - Créer `lib/screens/caisse/cash_denomination_dialog.dart` :
+    - Grille de saisie pour chaque coupure : 10 000, 5 000, 2 000, 1 000, 500, 200, 100 FCFA
+    - Calcul automatique du total physique : `sum(quantite × valeur_coupure)`
+    - Affichage de l'écart vs solde théorique
+    - Bouton « Valider » → ferme le dialog et retourne le total physique
+  - Intégrer ce dialog dans `CashClosingDialog` → remplacer le champ texte « Solde Physique » par un bouton « Décompte par coupures » qui ouvre `CashDenominationDialog` et pré-remplit le montant
+  - _Exigences : caisse_
+
+- [x] 20. Validation double clé pour transferts coffre
+  - Dans `lib/screens/caisse/cash_transfer_dialog.dart` :
+    - Après validation du formulaire, ouvrir `PinValidationDialog` (déjà créé en tâche 8)
+    - Si PIN invalide → interrompre le transfert et afficher un SnackBar
+    - Si PIN valide → procéder au transfert normalement
+  - _Exigences : caisse_
+
+- [x] 21. Intégration caméra pour photo client
+  - Ajouter `image_picker: ^1.1.2` dans `pubspec.yaml`
+  - Dans `lib/widgets/dialogs/client_form_dialog.dart` (section photo) :
+    - Remplacer la zone photo statique par deux boutons : « Prendre une photo » (caméra) + « Choisir depuis galerie »
+    - Appeler `ImagePicker().pickImage(source: ImageSource.camera)` ou `ImageSource.gallery`
+    - Sauvegarder l'image dans `{appDocDir}/photos/{clientId}.jpg` et stocker le chemin local dans `client.photoPath`
+  - _Exigences : clients_
 
 - [x] 16. Checkpoint — Tous les tests Phase 4 passent
   - Lancer `flutter test`

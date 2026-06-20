@@ -1,10 +1,15 @@
 // lib/screens/remboursements/repayment_form_dialog.dart
 
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/location_service.dart';
 import '../../models/loan_model.dart';
 import '../../models/repayment_schedule_model.dart';
 import '../../models/repayment_model.dart';
@@ -26,6 +31,7 @@ class _RepaymentFormDialogState extends State<RepaymentFormDialog> {
   final _commentController = TextEditingController();
   RepaymentMode _selectedMode = RepaymentMode.especes;
   bool _isLoading = false;
+  String? _justificatifPath;
 
   double _partCapital = 0;
   double _partInterets = 0;
@@ -64,12 +70,51 @@ class _RepaymentFormDialogState extends State<RepaymentFormDialog> {
     });
   }
 
+  Future<void> _pickJustificatif() async {
+    try {
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        imageQuality: 85,
+      );
+      if (image == null) return;
+      final file = File(image.path);
+      if (await file.length() > 5 * 1024 * 1024) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Photo trop volumineuse (max 5 Mo)')),
+          );
+        }
+        return;
+      }
+      setState(() => _justificatifPath = image.path);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur photo : $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _finalizeJustificatifPhoto(int repaymentId) async {
+    if (_justificatifPath == null) return;
+    final appDir = await getApplicationDocumentsDirectory();
+    final dir = Directory(p.join(appDir.path, 'collectes'));
+    if (!await dir.exists()) await dir.create(recursive: true);
+    final dest = p.join(dir.path, '$repaymentId.jpg');
+    await File(_justificatifPath!).copy(dest);
+    await DatabaseService().updateRepaymentPhotoPath(repaymentId, dest);
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
+      final position = await LocationService().getCurrentPosition();
+
       final repayment = Repayment(
         pretId: widget.loan.id!,
         echeanceId: widget.schedule?.id,
@@ -83,21 +128,27 @@ class _RepaymentFormDialogState extends State<RepaymentFormDialog> {
             'REC-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
         agentCollecteur: AuthService().currentUsername.isNotEmpty
             ? AuthService().currentUsername
-            : 'Inconnu', // utilisateur de session
+            : 'Inconnu',
         commentaire: _commentController.text,
+        latitude: position?.latitude,
+        longitude: position?.longitude,
+        photoJustificatifPath: _justificatifPath,
       );
 
-      await DatabaseService().insertRepayment(repayment);
+      final repaymentId = await DatabaseService().insertRepayment(repayment);
+      if (_justificatifPath != null) {
+        await _finalizeJustificatifPhoto(repaymentId);
+      }
 
       if (mounted) {
-        // Remplacer Navigator.pop par l'affichage du reçu
-        Navigator.pop(context, true); // Fermer le formulaire
-
+        Navigator.pop(context, true);
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) =>
-              PaymentReceiptDialog(repayment: repayment, loan: widget.loan),
+          builder: (context) => PaymentReceiptDialog(
+            repayment: repayment.copyWith(id: repaymentId),
+            loan: widget.loan,
+          ),
         );
       }
     } catch (e) {
@@ -198,6 +249,36 @@ class _RepaymentFormDialogState extends State<RepaymentFormDialog> {
                 }).toList(),
                 onChanged: (val) => setState(() => _selectedMode = val!),
               ),
+
+              const SizedBox(height: 16),
+
+              // Photo justificative
+              Row(
+                children: [
+                  const Text(
+                    'Photo justificative (optionnel)',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: _pickJustificatif,
+                    icon: const Icon(Icons.add_a_photo_outlined, size: 16),
+                    label: Text(_justificatifPath == null ? 'Ajouter' : 'Remplacer'),
+                  ),
+                ],
+              ),
+              if (_justificatifPath != null) ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(
+                    File(_justificatifPath!),
+                    height: 80,
+                    width: 80,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 16),
 

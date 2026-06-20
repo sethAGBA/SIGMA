@@ -11,6 +11,7 @@ import '../../widgets/dashboard/alerts_section.dart';
 import '../../widgets/dashboard/top_agents_section.dart';
 import '../../core/notifiers/dashboard_notifier.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/field_mode_service.dart';
 import '../../core/services/sync_service.dart';
 import '../../core/services/api_service.dart';
 import '../../widgets/dialogs/client_form_dialog.dart';
@@ -26,6 +27,7 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   bool _isOnline = false;
+  bool _preparingTour = false;
 
   @override
   void initState() {
@@ -44,6 +46,35 @@ class _DashboardPageState extends State<DashboardPage> {
     final online = await ApiService().isServerAvailable();
     if (mounted) setState(() => _isOnline = online);
     if (online) SyncService().flushPendingOperations();
+  }
+
+  Future<void> _prepareFieldTour() async {
+    setState(() => _preparingTour = true);
+    final result = await FieldModeService().prepareMorningSnapshot();
+    if (!mounted) return;
+    setState(() => _preparingTour = false);
+
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.usedCache
+                ? 'Tournée prête (cache) — ${result.clientCount} clients, '
+                    '${result.scheduleCount} échéances, ${result.requestCount} demandes'
+                : 'Tournée préparée — ${result.clientCount} clients, '
+                    '${result.scheduleCount} échéances, ${result.requestCount} demandes',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.errorMessage ?? 'Échec de la préparation'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
   }
 
   @override
@@ -155,6 +186,18 @@ class _DashboardPageState extends State<DashboardPage> {
           ],
         ),
         const Spacer(),
+        OutlinedButton.icon(
+          onPressed: _preparingTour ? null : _prepareFieldTour,
+          icon: _preparingTour
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.hiking_rounded, size: 16),
+          label: const Text('Préparer ma tournée'),
+        ),
+        const SizedBox(width: 12),
         // Indicateur mode online/offline
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

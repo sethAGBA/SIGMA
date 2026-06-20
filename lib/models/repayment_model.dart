@@ -23,6 +23,9 @@ class Repayment {
   final String numeroRecu;
   final String? agentCollecteur;
   final String? commentaire;
+  final double? latitude;
+  final double? longitude;
+  final String? photoJustificatifPath;
 
   Repayment({
     this.id,
@@ -37,6 +40,9 @@ class Repayment {
     required this.numeroRecu,
     this.agentCollecteur,
     this.commentaire,
+    this.latitude,
+    this.longitude,
+    this.photoJustificatifPath,
   });
 
   Map<String, dynamic> toMap() {
@@ -53,6 +59,9 @@ class Repayment {
       'numero_recu': numeroRecu,
       'agent_collecteur': agentCollecteur,
       'commentaire': commentaire,
+      'latitude': latitude,
+      'longitude': longitude,
+      'photo_justificatif_path': photoJustificatifPath,
     };
   }
 
@@ -73,6 +82,29 @@ class Repayment {
       numeroRecu: map['numero_recu'],
       agentCollecteur: map['agent_collecteur'],
       commentaire: map['commentaire'],
+      latitude: map['latitude']?.toDouble(),
+      longitude: map['longitude']?.toDouble(),
+      photoJustificatifPath: map['photo_justificatif_path'],
+    );
+  }
+
+  Repayment copyWith({int? id, String? photoJustificatifPath}) {
+    return Repayment(
+      id: id ?? this.id,
+      pretId: pretId,
+      echeanceId: echeanceId,
+      montantTotal: montantTotal,
+      partCapital: partCapital,
+      partInterets: partInterets,
+      partPenalites: partPenalites,
+      datePaiement: datePaiement,
+      modePaiement: modePaiement,
+      numeroRecu: numeroRecu,
+      agentCollecteur: agentCollecteur,
+      commentaire: commentaire,
+      latitude: latitude,
+      longitude: longitude,
+      photoJustificatifPath: photoJustificatifPath ?? this.photoJustificatifPath,
     );
   }
 }

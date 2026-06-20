@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/regulatory_export_service.dart';
 import '../../models/trial_balance_model.dart';
 
 class BalanceGeneralePage extends StatefulWidget {
@@ -14,6 +15,7 @@ class BalanceGeneralePage extends StatefulWidget {
 
 class _BalanceGeneralePageState extends State<BalanceGeneralePage> {
   final DatabaseService _db = DatabaseService();
+  final RegulatoryExportService _exportService = RegulatoryExportService();
   final currencyFormat = NumberFormat.currency(
     symbol: 'FCFA',
     decimalDigits: 0,
@@ -74,6 +76,28 @@ class _BalanceGeneralePageState extends State<BalanceGeneralePage> {
     }
   }
 
+  Future<void> _exportBalance() async {
+    if (_balance == null) return;
+    try {
+      final path = await _exportService.exportTrialBalanceCsv(
+        balance: _balance!,
+        dateDebut: _dateDebut,
+        dateFin: _dateFin,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Balance exportée : $path')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur export : $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -98,9 +122,7 @@ class _BalanceGeneralePageState extends State<BalanceGeneralePage> {
           ),
           IconButton(
             icon: const Icon(Icons.download),
-            onPressed: () {
-              // TODO: Export Excel
-            },
+            onPressed: _balance == null ? null : _exportBalance,
             tooltip: 'Exporter Excel',
           ),
           const SizedBox(width: 8),

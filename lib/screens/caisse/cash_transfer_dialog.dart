@@ -5,7 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/utils/audit_field_utils.dart';
-import '../../models/cash_operation_model.dart';
+import '../../widgets/dialogs/pin_validation_dialog.dart';
 
 class CashTransferDialog extends StatefulWidget {
   const CashTransferDialog({super.key});
@@ -20,7 +20,6 @@ class _CashTransferDialogState extends State<CashTransferDialog> {
   final _descriptionController = TextEditingController();
 
   bool _isLoading = false;
-  CashOperationCategory _typeTransfert = CashOperationCategory.transfert;
   bool _isApprovisionnement = true;
 
   @override
@@ -221,6 +220,25 @@ class _CashTransferDialogState extends State<CashTransferDialog> {
 
   void _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Validation double clé — PIN superviseur obligatoire (Exigence 11)
+    final pinOk = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PinValidationDialog(),
+    );
+
+    if (pinOk != true) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Transfert annulé — validation superviseur requise.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
 
     setState(() => _isLoading = true);
 

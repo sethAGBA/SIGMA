@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/database_service.dart';
 import '../../models/configuration_model.dart';
+import '../../models/plan_comptable_type.dart';
 
 class InstitutionConfigurationPage extends StatefulWidget {
   const InstitutionConfigurationPage({super.key});
@@ -39,6 +40,8 @@ class _InstitutionConfigurationPageState
   final _tauxInteretDefautController = TextEditingController();
   String _selectedModeCalcul = 'Dégressif';
   final List<String> _frequencesSelected = ['Mensuel'];
+  PlanComptableType _selectedPlanType = PlanComptableType.rcssfd;
+  PlanComptableType _loadedPlanType = PlanComptableType.rcssfd;
   final _tauxPenaliteRetardController = TextEditingController();
   final _delaiGraceMaxController = TextEditingController();
   final _epargneObligatoireController = TextEditingController();
@@ -57,6 +60,7 @@ class _InstitutionConfigurationPageState
       final legal = await DatabaseService().getLegalInformation();
       final financial = await DatabaseService().getFinancialParameters();
       final credit = await DatabaseService().getCreditParameters();
+      final planType = await DatabaseService().getPlanComptableType();
 
       setState(() {
         // Legal
@@ -92,6 +96,9 @@ class _InstitutionConfigurationPageState
         _ratioEndettementMaxController.text = credit.ratioEndettementMax
             .toString();
 
+        _selectedPlanType = planType;
+        _loadedPlanType = planType;
+
         _isLoading = false;
       });
     } catch (e) {
@@ -116,6 +123,16 @@ class _InstitutionConfigurationPageState
         );
         await DatabaseService().saveLegalInformation(info);
       } else if (_tabController.index == 1) {
+        if (_selectedPlanType != _loadedPlanType) {
+          final confirmed = await _confirmPlanSwitch();
+          if (!confirmed) {
+            setState(() => _isLoading = false);
+            return;
+          }
+          await DatabaseService().switchPlanComptable(_selectedPlanType);
+          _loadedPlanType = _selectedPlanType;
+        }
+
         final params = FinancialParameters(
           exerciceFiscal: _exerciceFiscalController.text,
           deviseReference: _deviseReferenceController.text,
@@ -164,6 +181,31 @@ class _InstitutionConfigurationPageState
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<bool> _confirmPlanSwitch() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Changer le plan comptable ?'),
+        content: Text(
+          'Le passage au plan ${_selectedPlanType.label} réinitialisera '
+          'le référentiel des comptes et les mappings comptables automatiques. '
+          'Les écritures existantes ne sont pas supprimées.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirmer'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   @override
@@ -305,6 +347,7 @@ class _InstitutionConfigurationPageState
             _exerciceFiscalController,
             Icons.calendar_today,
           ),
+          _buildPlanComptableSelector(isDark),
           _buildTextField(
             'Devise de référence',
             _deviseReferenceController,
@@ -432,6 +475,52 @@ class _InstitutionConfigurationPageState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: children,
+      ),
+    );
+  }
+
+  Widget _buildPlanComptableSelector(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Plan comptable réglementaire',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<PlanComptableType>(
+            value: _selectedPlanType,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.account_tree, size: 20),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              filled: true,
+              fillColor: isDark ? const Color(0xFF0F172A) : Colors.grey[50],
+            ),
+            items: PlanComptableType.values
+                .map(
+                  (type) => DropdownMenuItem(
+                    value: type,
+                    child: Text('${type.label} (${type.key})'),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value != null) setState(() => _selectedPlanType = value);
+            },
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'RCSSFD recommandé pour les SFD UMOA (comptes 501/530/521).',
+            style: TextStyle(
+              fontSize: 11,
+              color: isDark ? Colors.white54 : Colors.grey[600],
+            ),
+          ),
+        ],
       ),
     );
   }
