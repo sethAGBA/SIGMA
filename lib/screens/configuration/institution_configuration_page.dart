@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/services/configuration_api_service.dart';
 import '../../core/services/database_service.dart';
 import '../../models/configuration_model.dart';
 import '../../models/plan_comptable_type.dart';
@@ -57,6 +58,7 @@ class _InstitutionConfigurationPageState
   Future<void> _loadAllConfigs() async {
     setState(() => _isLoading = true);
     try {
+      await ConfigurationApiService().getConfiguration();
       final legal = await DatabaseService().getLegalInformation();
       final financial = await DatabaseService().getFinancialParameters();
       final credit = await DatabaseService().getCreditParameters();

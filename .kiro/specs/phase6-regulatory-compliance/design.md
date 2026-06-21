@@ -55,7 +55,63 @@ Aligné sur `backend/app/services/accounting_service.py`.
 key = 'plan_comptable_type', value = 'rcssfd' | 'syscohada'
 ```
 
-Migration v32 : insère `syscohada` si absent (bases existantes). Fresh install : `rcssfd` via `_seedPhase6Defaults()`.
+Fresh install : `rcssfd` via `_seedPhase6Defaults()`.
+
+**Bug 1 — Fix `_applyPhase6Schema()` (migration v31→v32) :**
+
+L'implémentation initiale insérait `syscohada` sans reseeder `comptes_comptables`. Le fix corrige `_applyPhase6Schema()` pour :
+1. Vérifier si `plan_comptable_type` est absent
+2. Si absent : appeler `reseedChartOfAccounts(db, rcssfd)` + insérer `plan_comptable_type = 'rcssfd'`
+3. Si présent : ne rien faire (idempotence)
+
+```dart
+Future<void> _applyPhase6Schema(Database db) async {
+  final existing = await db.query(
+    'configurations',
+    where: 'key = ?',
+    whereArgs: ['plan_comptable_type'],
+  );
+  if (existing.isEmpty) {
+    // Base migrée sans plan défini → reseed RCSSFD
+    await ChartOfAccountsService().reseedChartOfAccounts(
+      db,
+      PlanComptableType.rcssfd,
+    );
+    await db.insert('configurations', {
+      'key': 'plan_comptable_type',
+      'value': PlanComptableType.rcssfd.key,
+    });
+  }
+  // Si déjà présent : conserver tel quel (idempotent)
+}
+```
+
+---
+
+## 1-BIS. Correction encodage assets (Bug 2)
+
+### Cause racine
+
+Les deux fichiers assets ont été sauvegardés en Windows-1252 mais Flutter les lit comme UTF-8 via `rootBundle.loadString()`. Cela produit un double-encoding silencieux : `é` (0xE9 en Latin-1) devient `Ã©` (0xC3 0xA9 en UTF-8 mal interprété).
+
+### Fix
+
+Réécrire les deux fichiers en UTF-8 sans BOM :
+- `lib/assets/docs/plan_comptable_syscohada.txt` : remplacer toutes les séquences `Ã©→é`, `Ã →à`, `Ã¨→è`, `â€™→'`, `Ã®→î`, `Ã´→ô`, `Ã¹→ù`, `Ã»→û`, `Ã§→ç`, `Å"→œ`
+- `lib/assets/docs/Plan des Comptes RCSSFD.txt` : remplacer tous les `?` de substitution Unicode par les caractères accentués corrects selon le contexte lexical
+
+### Validation optionnelle dans `PlanParser`
+
+```dart
+static List<AccountingAccount> parse(String content) {
+  // Détection préventive de double-encoding
+  if (content.contains('Ã') || content.contains('â€')) {
+    debugPrint('[PlanParser] AVERTISSEMENT: Caractères suspects détectés — '
+        'fichier probablement encodé en Windows-1252 lu comme UTF-8.');
+  }
+  // ... reste du parsing inchangé
+}
+```
 
 ---
 

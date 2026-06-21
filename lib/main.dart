@@ -27,9 +27,12 @@ void main() async {
   final themeService = ThemeService();
   await themeService.init();
 
-  // Vérifier si une session existe déjà (stay-logged-in)
+  // Séquence d'initialisation Phase 0 (req. 3.1) :
+  // 1. ApiService().init()      → charger l'URL serveur depuis SharedPreferences
+  // 2. ConnectivityMonitor()  → ping /health + connectivity_plus
+  // 3. runApp()
   final authService = AuthService();
-  await authService.init();
+  await authService.init(); // inclut ApiService().init()
 
   // Injecter le navigatorKey dans SessionManager
   SessionManager().navigatorKey = navigatorKey;
@@ -38,9 +41,9 @@ void main() async {
     SessionManager().start();
   }
 
+  ConnectivityMonitor().start();
   // Tenter de vider la file des opérations offline en attente
   SyncService().flushPendingOperations();
-  ConnectivityMonitor().start();
 
   // Créer le DashboardNotifier et enregistrer le callback de logout
   // pour que AuthService puisse vider le cache sans accéder au contexte

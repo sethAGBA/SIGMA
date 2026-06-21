@@ -50,6 +50,32 @@ La Phase 6 aligne SIGMA sur les exigences comptables et réglementaires des **Sy
 4. WHEN l'utilisateur change le plan dans `InstitutionConfigurationPage`, THE system SHALL reseeder `comptes_comptables` et mettre à jour le mapping automatique après confirmation.
 5. THE migration v32 SHALL persister `plan_comptable_type` sans écraser les comptes existants (valeur `syscohada` pour bases migrées).
 
+> ⚠️ **Bug 1 identifié** : Le critère 5 est partiellement incorrect tel qu'implémenté. `_applyPhase6Schema()` insère `syscohada` mais n'appelle jamais `insertFullChartOfAccounts()` avec RCSSFD pour les bases migrées. Voir exigence 1-BUG1 ci-dessous.
+
+### Exigence 1-BUG1 : Correction migration v32 — plan RCSSFD manquant
+
+**User Story :** En tant qu'institution déjà installée migrant vers v32, je veux que mon plan comptable soit correctement initialisé avec RCSSFD, afin de ne pas voir persister les comptes SYSCOHADA obsolètes.
+
+#### Critères d'acceptation
+
+1-BUG1.1 WHEN une base existante est migrée de v31 à v32 et qu'aucun `plan_comptable_type` n'est défini dans `configurations`, THE system SHALL appeler `ChartOfAccountsService().reseedChartOfAccounts(db, PlanComptableType.rcssfd)` et insérer `plan_comptable_type = 'rcssfd'`.
+
+1-BUG1.2 WHEN `_applyPhase6Schema()` s'exécute et qu'un `plan_comptable_type` est déjà présent, THE system SHALL conserver la valeur existante sans écraser ni reseeder (idempotence).
+
+1-BUG1.3 WHEN la migration v32 est appliquée sans plan préexistant, THE system SHALL insérer le compte 530 (Caisse RCSSFD) dans `comptes_comptables`, vérifiant ainsi que le reseed RCSSFD s'est bien exécuté.
+
+### Exigence 1-BUG2 : Correction encodage assets — libellés corrompus
+
+**User Story :** En tant qu'utilisateur, je veux voir les libellés des comptes en français correct, afin de pouvoir identifier les comptes sans ambiguïté dans l'interface et les exports.
+
+#### Critères d'acceptation
+
+1-BUG2.1 WHEN l'application charge `plan_comptable_syscohada.txt`, THE libellés des comptes SHALL être lisibles en UTF-8 propre sans séquences `Ã©`, `Ã `, `Ã¨`, `â€™` ni autres artefacts Windows-1252.
+
+1-BUG2.2 WHEN l'application charge `Plan des Comptes RCSSFD.txt`, THE libellés des comptes SHALL être lisibles en UTF-8 propre sans `?` de substitution ni troncatures.
+
+1-BUG2.3 WHEN `PlanParser.parse()` détecte des séquences suspectes de double-encoding (`Ã`, `â€`), THE system SHALL émettre un avertissement `debugPrint` sans interrompre le parsing.
+
 ### Exigence 2 : Export balance réglementaire
 
 **User Story :** En tant qu'auditeur externe, je veux exporter la balance au format Excel français, afin de l'intégrer dans mes outils d'audit.

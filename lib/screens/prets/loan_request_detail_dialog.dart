@@ -1,6 +1,9 @@
 // lib/screens/prets/loan_request_detail_dialog.dart
 
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../core/services/database_service.dart';
 import '../../models/loan_request_model.dart';
 import '../../models/loan_model.dart';

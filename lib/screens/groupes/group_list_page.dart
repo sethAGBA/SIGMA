@@ -1,7 +1,7 @@
 ﻿// lib/screens/groupes/group_list_page.dart
 
 import 'package:flutter/material.dart';
-import '../../core/services/database_service.dart';
+import '../../core/services/group_api_service.dart';
 import '../../core/services/client_api_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/client_model.dart';
@@ -30,7 +30,7 @@ class _GroupListPageState extends State<GroupListPage> {
 
   void _refreshGroups() {
     setState(() {
-      _groupsFuture = DatabaseService().searchGroupes(
+      _groupsFuture = GroupApiService().searchGroupes(
         query: _searchController.text.trim(),
         status: _selectedStatus,
       );

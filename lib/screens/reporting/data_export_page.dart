@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/services/bceao_export_service.dart';
 import '../../core/services/database_service.dart';
 
 class DataExportPage extends StatefulWidget {
@@ -14,6 +15,9 @@ class DataExportPage extends StatefulWidget {
 
 class _DataExportPageState extends State<DataExportPage> {
   bool _isExporting = false;
+  final _bceaoService = BceaoExportService();
+
+  // ─── Export données opérationnelles ───────────────────────────────────────
 
   Future<void> _exportToCSV(String entity) async {
     setState(() => _isExporting = true);
@@ -21,47 +25,46 @@ class _DataExportPageState extends State<DataExportPage> {
     try {
       final db = await DatabaseService().database;
       List<Map<String, dynamic>> data = [];
-      String fileName = "";
+      String fileName = '';
 
       switch (entity) {
         case 'Clients':
           data = await db.query('clients');
-          fileName = "clients_export";
+          fileName = 'clients_export';
           break;
         case 'Prêts':
           data = await db.query('prets');
-          fileName = "prets_export";
+          fileName = 'prets_export';
           break;
         case 'Épargne':
           data = await db.query('transactions_epargne');
-          fileName = "transactions_epargne_export";
+          fileName = 'transactions_epargne_export';
           break;
         case 'Remboursements':
           data = await db.query('remboursements');
-          fileName = "remboursements_export";
+          fileName = 'remboursements_export';
           break;
         default:
-          throw "Entité inconnue";
+          throw 'Entité inconnue';
       }
 
       if (data.isEmpty) {
-        throw "Aucune donnée à exporter pour $entity";
+        throw 'Aucune donnée à exporter pour $entity';
       }
 
-      // Generate CSV string
       final headers = data.first.keys.join(';');
       final rows = data
           .map((row) => row.values.map((v) => '"$v"').join(';'))
           .join('\n');
-      final csvContent = "$headers\n$rows";
+      final csvContent = '$headers\n$rows';
 
-      // Save file
       final directory = await getDownloadsDirectory();
-      if (directory == null)
+      if (directory == null) {
         throw "Impossible d'accéder au dossier Téléchargements";
+      }
 
       final filePath =
-          "${directory.path}/${fileName}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.csv";
+          '${directory.path}/${fileName}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.csv';
       final file = File(filePath);
       await file.writeAsString(csvContent);
 
@@ -77,7 +80,7 @@ class _DataExportPageState extends State<DataExportPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur d\'exportation : $e'),
+            content: Text("Erreur d'exportation : $e"),
             backgroundColor: Colors.red,
           ),
         );
@@ -86,6 +89,52 @@ class _DataExportPageState extends State<DataExportPage> {
       if (mounted) setState(() => _isExporting = false);
     }
   }
+
+  // ─── Export BCEAO ─────────────────────────────────────────────────────────
+
+  Future<void> _exportBceao(String type) async {
+    setState(() => _isExporting = true);
+
+    try {
+      String filePath;
+      switch (type) {
+        case 'encours_credit':
+          filePath = await _bceaoService.exportEncoursCreditCsv();
+          break;
+        case 'depots':
+          filePath = await _bceaoService.exportDepotsCsv();
+          break;
+        case 'par':
+          filePath = await _bceaoService.exportParCsv();
+          break;
+        default:
+          throw 'Type BCEAO inconnu : $type';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Fichier BCEAO généré : $filePath'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur export BCEAO : $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  // ─── Build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -101,6 +150,8 @@ class _DataExportPageState extends State<DataExportPage> {
             _buildHeader(isDark),
             const SizedBox(height: 40),
             _buildExportGrid(isDark),
+            const SizedBox(height: 48),
+            _buildBceaoSection(isDark),
           ],
         ),
       ),
@@ -116,7 +167,7 @@ class _DataExportPageState extends State<DataExportPage> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Icon(
@@ -160,7 +211,7 @@ class _DataExportPageState extends State<DataExportPage> {
       children: [
         _buildExportCard(
           'Registre des Clients',
-          'Liste complète des clients avec informations d\'identification et contact.',
+          "Liste complète des clients avec informations d'identification et contact.",
           Icons.people_alt_rounded,
           Colors.blue,
           () => _exportToCSV('Clients'),
@@ -175,7 +226,7 @@ class _DataExportPageState extends State<DataExportPage> {
           isDark,
         ),
         _buildExportCard(
-          'Transactions d\'Épargne',
+          "Transactions d'Épargne",
           'Historique des dépôts et retraits sur les comptes épargne.',
           Icons.savings_rounded,
           Colors.teal,
@@ -209,11 +260,13 @@ class _DataExportPageState extends State<DataExportPage> {
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
+          color: isDark
+              ? Colors.white10
+              : Colors.black.withValues(alpha: 0.05),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -225,7 +278,7 @@ class _DataExportPageState extends State<DataExportPage> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(icon, color: color, size: 28),
@@ -260,6 +313,178 @@ class _DataExportPageState extends State<DataExportPage> {
                     )
                   : const Icon(Icons.file_download_rounded),
               label: Text(_isExporting ? 'Exportation...' : 'Exporter en CSV'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Section Exports BCEAO ────────────────────────────────────────────────
+
+  Widget _buildBceaoSection(bool isDark) {
+    const color = Colors.purple;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.account_balance_outlined,
+                color: color,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Exports BCEAO',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                Text(
+                  'Fichiers plats réglementaires (séparateur |, UTF-8 BOM)',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Wrap(
+          spacing: 24,
+          runSpacing: 24,
+          children: [
+            _buildBceaoCard(
+              title: 'Encours Crédit',
+              description:
+                  'Portefeuille de prêts actifs : capital restant, produit, '
+                  'échéance finale et jours de retard par client.',
+              icon: Icons.credit_score_rounded,
+              color: color,
+              onExport: () => _exportBceao('encours_credit'),
+              isDark: isDark,
+            ),
+            _buildBceaoCard(
+              title: 'Dépôts Épargne',
+              description:
+                  'Soldes des comptes épargne actifs par client et type de '
+                  'produit (libre, bloqué, terme, obligatoire).',
+              icon: Icons.savings_rounded,
+              color: Colors.indigo,
+              onExport: () => _exportBceao('depots'),
+              isDark: isDark,
+            ),
+            _buildBceaoCard(
+              title: 'PAR (30/90)',
+              description:
+                  'Indicateurs de risque portefeuille : PAR30 et PAR90 '
+                  'en pourcentage et en montant FCFA.',
+              icon: Icons.show_chart_rounded,
+              color: Colors.deepOrange,
+              onExport: () => _exportBceao('par'),
+              isDark: isDark,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBceaoCard({
+    required String title,
+    required String description,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onExport,
+    required bool isDark,
+  }) {
+    return Container(
+      width: 350,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isDark
+              ? color.withValues(alpha: 0.25)
+              : color.withValues(alpha: 0.15),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            description,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.grey,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isExporting ? null : onExport,
+              icon: _isExporting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.file_download_rounded),
+              label: Text(
+                _isExporting ? 'Génération...' : 'Générer fichier BCEAO',
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: color,
                 foregroundColor: Colors.white,

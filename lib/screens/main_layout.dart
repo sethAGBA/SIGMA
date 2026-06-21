@@ -51,17 +51,54 @@ import '../core/services/auth_service.dart';
 import '../models/user_model.dart';
 import '../widgets/sync_status_badge.dart';
 import '../widgets/field_mode_banner.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
 
   @override
-  State<MainLayout> createState() => _MainLayoutState();
+  State<MainLayout> createState() => MainLayoutState();
 }
 
-class _MainLayoutState extends State<MainLayout> {
+class MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0; // Default to Dashboard
   int _dashboardRefreshKey = 0; // Incrémenté à chaque navigation vers le dashboard
+
+  @visibleForTesting
+  int get selectedIndexForTesting => _selectedIndex;
+
+  @visibleForTesting
+  void selectDestinationForTesting(int index) => _onDestinationSelected(index);
+
+  void _onDestinationSelected(int index) {
+    if (!AuthService().canAccessIndex(index)) {
+      setState(() => _selectedIndex = 0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Accès refusé. Vous n\'avez pas les droits pour ce module.',
+          ),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+    if (index == 3) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const ClientFormDialog(),
+      );
+    } else {
+      setState(() {
+        if (index == 0 && _selectedIndex != 0) {
+          _dashboardRefreshKey++;
+        }
+        _selectedIndex = index;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -189,24 +226,7 @@ class _MainLayoutState extends State<MainLayout> {
           children: [
             Sidebar(
               selectedIndex: _selectedIndex,
-              onDestinationSelected: (index) {
-                if (index == 3) {
-                  // Ouvrir le dialogue Nouveau Client au lieu de naviguer
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (context) => const ClientFormDialog(),
-                  );
-                } else {
-                  setState(() {
-                    // Incrémenter la key du dashboard quand on y revient → force rebuild + rechargement
-                    if (index == 0 && _selectedIndex != 0) {
-                      _dashboardRefreshKey++;
-                    }
-                    _selectedIndex = index;
-                  });
-                }
-              },
+              onDestinationSelected: _onDestinationSelected,
             ),
             Expanded(
               child: Column(

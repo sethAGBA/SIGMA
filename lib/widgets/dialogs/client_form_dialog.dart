@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:intl/intl.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/group_api_service.dart';
 import '../../core/services/client_api_service.dart';
 import '../../core/services/location_service.dart';
 import '../../core/utils/dialog_utils.dart';
@@ -117,7 +118,7 @@ class _ClientFormDialogState extends State<ClientFormDialog> {
   }
 
   Future<void> _loadGroupes() async {
-    final groupes = await DatabaseService().getGroupesSolidaires();
+    final groupes = await GroupApiService().getGroupes();
     if (mounted) setState(() => _groupes = groupes);
   }
 

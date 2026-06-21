@@ -1,7 +1,7 @@
 // lib/screens/prets/loan_list_page.dart
 
 import 'package:flutter/material.dart';
-import '../../core/services/database_service.dart';
+import '../../core/services/agency_api_service.dart';
 import '../../core/services/loan_api_service.dart';
 import '../../models/loan_model.dart';
 import '../../models/agent_model.dart';
@@ -35,8 +35,8 @@ class _LoanListPageState extends State<LoanListPage> {
   }
 
   Future<void> _loadFilterOptions() async {
-    final agents = await DatabaseService().getAgents();
-    final agencies = await DatabaseService().getAgencies();
+    final agents = await AgencyApiService().getAgents();
+    final agencies = await AgencyApiService().getAgencies();
     if (mounted) {
       setState(() {
         _agents = agents.where((a) => a.isActive).toList();

@@ -17,19 +17,18 @@ class SessionManager {
   // NavigatorKey injecté depuis main.dart
   GlobalKey<NavigatorState>? navigatorKey;
 
+  bool get isActive => _active;
+
   void start() {
     if (!AuthService().isLoggedIn) return;
     _active = true;
     _resetTimers();
   }
 
+  /// Appelé quand l'utilisateur interagit ou clique "Rester connecté".
+  /// Ne fait rien si la session a déjà expiré (_active == false).
   void resetTimer() {
     if (!_active) return;
-    // Si le warning est affiché, le fermer
-    if (_warningShown) {
-      navigatorKey?.currentState?.pop();
-      _warningShown = false;
-    }
     _resetTimers();
   }
 
@@ -66,20 +65,45 @@ class SessionManager {
     showDialog(
       context: ctx,
       barrierDismissible: false,
-      builder: (_) => const _WarningDialog(),
-    ).then((_) => _warningShown = false);
+      // Passer onStayConnected en callback pour éviter toute interaction
+      // avec le Navigator après expiration de la session.
+      builder: (_) => _WarningDialog(onStayConnected: _handleStayConnected),
+    ).then((_) {
+      // Le dialog est fermé (quelle qu'en soit la raison)
+      _warningShown = false;
+    });
+  }
+
+  /// Callback invoqué par le bouton "Rester connecté" du dialog.
+  ///
+  /// On ferme le dialog via le navigatorKey global (pas via le context du
+  /// dialog qui peut être détaché si _onExpired s'est exécuté entre-temps),
+  /// puis on réinitialise les timers uniquement si la session est encore active.
+  void _handleStayConnected() {
+    // Fermer le dialog en toute sécurité via le navigatorKey global
+    final state = navigatorKey?.currentState;
+    if (state != null && state.canPop()) {
+      state.pop();
+    }
+    // Ne relancer les timers que si la session n'a pas encore expiré
+    if (_active) {
+      _resetTimers();
+    }
   }
 
   void _onExpired() {
     if (!_active) return;
-    stop();
+    stop(); // annule les timers, met _active = false
     final state = navigatorKey?.currentState;
     if (state == null) return;
-    // Fermer tous les dialogs ouverts
-    state.popUntil((route) => route.isFirst);
+
+    // Fermer le dialog de warning s'il est encore affiché
+    if (state.canPop()) {
+      state.popUntil((route) => route.isFirst);
+    }
     // Déconnecter
     AuthService().logout();
-    // Naviguer vers LoginPage
+    // Remplacer toute la pile par LoginPage
     state.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (_) => false,
@@ -89,7 +113,12 @@ class SessionManager {
 
 // Widget dialog d'avertissement interne
 class _WarningDialog extends StatelessWidget {
-  const _WarningDialog();
+  /// Callback invoqué quand l'utilisateur clique "Rester connecté".
+  /// N'utilise PAS Navigator.of(context) directement pour éviter
+  /// l'écran noir si la session expire pendant que le dialog est ouvert.
+  final VoidCallback onStayConnected;
+
+  const _WarningDialog({required this.onStayConnected});
 
   @override
   Widget build(BuildContext context) {
@@ -106,10 +135,7 @@ class _WarningDialog extends StatelessWidget {
       ),
       actions: [
         ElevatedButton(
-          onPressed: () {
-            Navigator.of(context).pop();
-            SessionManager().resetTimer();
-          },
+          onPressed: onStayConnected,
           child: const Text('Rester connecté'),
         ),
       ],

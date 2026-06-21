@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/services/cash_api_service.dart';
 import '../../core/services/database_service.dart';
 import '../../models/cash_operation_model.dart';
 import 'cash_closing_dialog.dart';
@@ -41,7 +42,7 @@ class _CashLedgerPageState extends State<CashLedgerPage> {
 
   void _refresh() {
     setState(() {
-      _operationsFuture = DatabaseService().getOperationsCaisse(
+      _operationsFuture = CashApiService().getOperationsCaisse(
         startDate: _startDate,
         endDate: _endDate,
         searchQuery: _searchQuery,

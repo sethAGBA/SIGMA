@@ -1,9 +1,11 @@
 // lib/screens/configuration/server_config_page.dart
 //
-// Permet de configurer l'adresse IP du serveur FastAPI depuis l'app.
+// Section « Connexion serveur » — accès ADMIN uniquement (Phase 0, req. 4).
 
 import 'package:flutter/material.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/services/connectivity_monitor.dart';
 import '../../core/theme/app_colors.dart';
 
 class ServerConfigPage extends StatefulWidget {
@@ -15,9 +17,15 @@ class ServerConfigPage extends StatefulWidget {
 
 class _ServerConfigPageState extends State<ServerConfigPage> {
   late TextEditingController _urlController;
+  String? _validationError;
   bool _isTesting = false;
   String? _testResult;
   bool? _testSuccess;
+
+  static final _urlRegex = RegExp(
+    r'^https?://[a-zA-Z0-9\-\.]+:\d{1,5}(/.*)?$',
+    caseSensitive: false,
+  );
 
   @override
   void initState() {
@@ -32,31 +40,62 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
   }
 
   Future<void> _testConnection() async {
+    final url = _urlController.text.trim();
+    if (!_urlRegex.hasMatch(url)) {
+      setState(() {
+        _validationError =
+            'Format invalide. Exemple : http://192.168.1.100:8000/api/v1';
+        _testResult = null;
+      });
+      return;
+    }
+
     setState(() {
       _isTesting = true;
       _testResult = null;
+      _validationError = null;
     });
 
-    final url = _urlController.text.trim();
-    if (url.isNotEmpty) {
+    // Test sans persister l'URL (req. 4.7) — sauvegarde temporaire puis restauration
+    final savedUrl = ApiService().baseUrl;
+    try {
       await ApiService().setServerUrl(url);
+      final available = await ApiService().isServerAvailable();
+      await ApiService().setServerUrl(savedUrl);
+
+      if (!mounted) return;
+      setState(() {
+        _isTesting = false;
+        _testSuccess = available;
+        _testResult = available
+            ? 'Connexion réussie — serveur SIGMA détecté.'
+            : 'Serveur inaccessible. Vérifiez l\'IP et que le serveur est démarré.';
+      });
+    } catch (_) {
+      await ApiService().setServerUrl(savedUrl);
+      if (!mounted) return;
+      setState(() {
+        _isTesting = false;
+        _testSuccess = false;
+        _testResult = 'Serveur inaccessible. Vérifiez l\'IP et que le serveur est démarré.';
+      });
     }
-
-    final available = await ApiService().isServerAvailable();
-
-    setState(() {
-      _isTesting = false;
-      _testSuccess = available;
-      _testResult = available
-          ? '✅ Connexion réussie ! Serveur SIGMA détecté.'
-          : '❌ Serveur inaccessible. Vérifiez l\'IP et que le serveur est démarré.';
-    });
   }
 
   Future<void> _save() async {
     final url = _urlController.text.trim();
-    if (url.isEmpty) return;
+    if (!_urlRegex.hasMatch(url)) {
+      setState(() {
+        _validationError =
+            'Format invalide. Exemple : http://192.168.1.100:8000/api/v1';
+      });
+      return;
+    }
+
+    setState(() => _validationError = null);
     await ApiService().setServerUrl(url);
+    ConnectivityMonitor().start();
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -69,8 +108,11 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!AuthService().isAdmin) {
+      return const SizedBox.shrink();
+    }
+
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -83,7 +125,7 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Configuration du Serveur',
+                  'Connexion serveur',
                   style: theme.textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -93,13 +135,15 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
                   'Adresse IP du PC serveur sur votre réseau local (LAN)',
                   style: theme.textTheme.bodyMedium,
                 ),
-                const SizedBox(height: 32),
-
-                // Statut mode actuel
-                _buildModeIndicator(isDark),
                 const SizedBox(height: 24),
 
-                // Champ URL
+                ValueListenableBuilder<ConnectivityStatus>(
+                  valueListenable: ConnectivityMonitor().statusNotifier,
+                  builder: (context, status, _) =>
+                      _StatusIndicator(status: status),
+                ),
+                const SizedBox(height: 24),
+
                 Text(
                   'URL du serveur API',
                   style: theme.textTheme.titleSmall?.copyWith(
@@ -113,6 +157,7 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
                     hintText: 'http://192.168.1.100:8000/api/v1',
                     prefixIcon: const Icon(Icons.dns_rounded),
                     filled: true,
+                    errorText: _validationError,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -124,7 +169,6 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // Boutons
                 Row(
                   children: [
                     ElevatedButton.icon(
@@ -136,34 +180,41 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.wifi_find_rounded),
-                      label: Text(_isTesting ? 'Test...' : 'Tester la connexion'),
+                      label: Text(
+                        _isTesting ? 'Test...' : 'Tester la connexion',
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.secondary,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 14),
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 16),
                     ElevatedButton.icon(
                       onPressed: _save,
                       icon: const Icon(Icons.save_rounded),
-                      label: const Text('Sauvegarder'),
+                      label: const Text('Enregistrer'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 14),
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ],
                 ),
 
-                // Résultat du test
                 if (_testResult != null) ...[
                   const SizedBox(height: 20),
                   Container(
@@ -196,9 +247,18 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
                 const SizedBox(height: 32),
                 const Divider(),
                 const SizedBox(height: 16),
-
-                // Aide
-                _buildHelp(isDark),
+                const Text(
+                  'Comment trouver l\'IP du serveur ?',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '1. Sur le PC serveur : ouvrir un terminal (cmd)\n'
+                  '2. Taper : ipconfig\n'
+                  '3. Relever l\'Adresse IPv4 (ex: 192.168.1.100)\n'
+                  '4. Entrer : http://192.168.1.100:8000/api/v1',
+                  style: TextStyle(fontSize: 13, height: 1.6),
+                ),
               ],
             ),
           ),
@@ -206,59 +266,39 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
       ),
     );
   }
+}
 
-  Widget _buildModeIndicator(bool isDark) {
-    final isOnline = ApiService().baseUrl.isNotEmpty;
+class _StatusIndicator extends StatelessWidget {
+  final ConnectivityStatus status;
+  const _StatusIndicator({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (status) {
+      ConnectivityStatus.online => Colors.green,
+      ConnectivityStatus.syncing => Colors.orange,
+      ConnectivityStatus.offline => Colors.red,
+    };
+    final label = switch (status) {
+      ConnectivityStatus.online => 'Connecté',
+      ConnectivityStatus.syncing => 'Synchronisation...',
+      ConnectivityStatus.offline => 'Hors ligne',
+    };
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurfaceVariant : AppColors.lightSurfaceVariant,
+        color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Row(
         children: [
-          Icon(
-            isOnline ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
-            color: isOnline ? AppColors.success : Colors.grey,
-          ),
+          CircleAvatar(radius: 6, backgroundColor: color),
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Mode actuel : ${isOnline ? "Réseau (LAN)" : "Hors ligne (SQLite local)"}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  'Serveur configuré : ${ApiService().baseUrl}',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
         ],
       ),
-    );
-  }
-
-  Widget _buildHelp(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Comment trouver l\'IP du serveur ?',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          '1. Sur le PC serveur : ouvrir un terminal (cmd)\n'
-          '2. Taper : ipconfig\n'
-          '3. Relever l\'Adresse IPv4 (ex: 192.168.1.100)\n'
-          '4. Entrer : http://192.168.1.100:8000/api/v1',
-          style: TextStyle(fontSize: 13, height: 1.6),
-        ),
-      ],
     );
   }
 }

@@ -1,7 +1,14 @@
 // lib/screens/prets/loan_detail_dialog.dart
 
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+
 import '../../core/services/database_service.dart';
+import '../../core/services/loan_contract_template_service.dart';
 import '../../models/loan_model.dart';
 import '../../models/repayment_schedule_model.dart';
 import '../../core/theme/app_colors.dart';
@@ -25,10 +32,18 @@ class _LoanDetailDialogState extends State<LoanDetailDialog>
   List<Repayment> _repayments = [];
   bool _isLoading = true;
 
+  // --- Scan contrat ---
+  bool _scanLoading = false;
+  String? _scanPath;
+  Uint8List? _scanBytes; // null si chargé depuis chemin fichier
+
+  // --- Génération contrat PDF ---
+  bool _contractGenerating = false;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _loadData();
   }
 
@@ -38,12 +53,27 @@ class _LoanDetailDialogState extends State<LoanDetailDialog>
       widget.loanId,
     );
     final repayments = await DatabaseService().getRepayments(widget.loanId);
+    final scanData = await DatabaseService().getLoanContractScan(widget.loanId);
+
     if (mounted) {
+      Uint8List? bytes;
+      // Priorité : chemin fichier local ; sinon base64 stocké
+      final path = scanData['path'];
+      final b64 = scanData['base64'];
+      if (path != null && File(path).existsSync()) {
+        bytes = await File(path).readAsBytes();
+      } else if (b64 != null && b64.isNotEmpty) {
+        try {
+          bytes = base64Decode(b64);
+        } catch (_) {}
+      }
       setState(() {
         _loan = loan;
         _schedule = schedule;
         _repayments = repayments;
         _isLoading = false;
+        _scanPath = path;
+        _scanBytes = bytes;
       });
     }
   }
@@ -52,6 +82,113 @@ class _LoanDetailDialogState extends State<LoanDetailDialog>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  // ------------------------------------------------------------------ SCAN
+
+  Future<void> _importScan() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final file = result.files.first;
+    if (file.bytes == null) return;
+
+    setState(() => _scanLoading = true);
+
+    try {
+      // Sauvegarder localement dans appDocDir
+      final appDir = await getApplicationDocumentsDirectory();
+      final scansDir = Directory('${appDir.path}/contract_scans');
+      if (!scansDir.existsSync()) scansDir.createSync(recursive: true);
+
+      final ext = file.extension ?? 'bin';
+      final localPath =
+          '${scansDir.path}/pret_${widget.loanId}_contrat.$ext';
+      await File(localPath).writeAsBytes(file.bytes!);
+
+      // Encoder en base64 pour portabilité (backup)
+      final b64 = base64Encode(file.bytes!);
+
+      await DatabaseService().saveLoanContractScan(widget.loanId, localPath, b64);
+
+      if (mounted) {
+        setState(() {
+          _scanPath = localPath;
+          _scanBytes = file.bytes;
+          _scanLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Scan importé et archivé avec succès.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _scanLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de l\'import : $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteScan() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer le scan'),
+        content: const Text(
+          'Voulez-vous vraiment supprimer le scan du contrat archivé ?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    await DatabaseService().deleteLoanContractScan(widget.loanId);
+    // Supprimer le fichier local si accessible
+    if (_scanPath != null) {
+      final f = File(_scanPath!);
+      if (f.existsSync()) {
+        try {
+          await f.delete();
+        } catch (_) {}
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _scanPath = null;
+        _scanBytes = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Scan supprimé.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
   }
 
   @override
@@ -132,11 +269,33 @@ class _LoanDetailDialogState extends State<LoanDetailDialog>
       labelColor: AppColors.primary,
       unselectedLabelColor: Colors.grey,
       indicatorColor: AppColors.primary,
-      tabs: const [
-        Tab(text: 'Informations générales', icon: Icon(Icons.info_outline)),
-        Tab(text: 'Échéancier', icon: Icon(Icons.calendar_month_outlined)),
-        Tab(text: 'Remboursements', icon: Icon(Icons.history)),
-        Tab(text: 'Suivi & Terrain', icon: Icon(Icons.map_outlined)),
+      tabs: [
+        const Tab(text: 'Informations générales', icon: Icon(Icons.info_outline)),
+        const Tab(text: 'Échéancier', icon: Icon(Icons.calendar_month_outlined)),
+        const Tab(text: 'Remboursements', icon: Icon(Icons.history)),
+        const Tab(text: 'Suivi & Terrain', icon: Icon(Icons.map_outlined)),
+        Tab(
+          text: 'Contrat signé',
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Icon(Icons.description_outlined),
+              if (_scanBytes != null)
+                Positioned(
+                  right: -4,
+                  top: -4,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.green,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -149,6 +308,7 @@ class _LoanDetailDialogState extends State<LoanDetailDialog>
         _buildScheduleTable(),
         _buildRepaymentHistory(),
         _buildFollowupTab(),
+        _buildContractScanTab(),
       ],
     );
   }
@@ -467,6 +627,244 @@ class _LoanDetailDialogState extends State<LoanDetailDialog>
     );
   }
 
+  // ------------------------------------------------------------------ TAB: Contrat signé
+
+  Widget _buildContractScanTab() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final bool hasScan = _scanBytes != null;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('Archivage du contrat signé'),
+
+          // ---- Zone de scan ----
+          if (_scanLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(40),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (!hasScan)
+            _buildNoScanPlaceholder(isDark)
+          else
+            _buildScanPreview(isDark),
+
+          const SizedBox(height: 24),
+
+          // ---- Actions ----
+          Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: _scanLoading ? null : _importScan,
+                icon: const Icon(Icons.upload_file_outlined),
+                label: Text(hasScan ? 'Remplacer le scan' : 'Importer scan'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                ),
+              ),
+              if (hasScan) ...[
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: _scanLoading ? null : _deleteScan,
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  label: const Text(
+                    'Supprimer scan',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.red),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // ---- Infos formats acceptés ----
+          Text(
+            'Formats acceptés : PDF, JPG, JPEG, PNG',
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? Colors.white38 : Colors.grey,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoScanPlaceholder(bool isDark) {
+    return Container(
+      width: double.infinity,
+      height: 200,
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.04) : Colors.grey[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? Colors.white24 : Colors.grey.shade300,
+          style: BorderStyle.solid,
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.cloud_upload_outlined,
+            size: 48,
+            color: isDark ? Colors.white38 : Colors.grey.shade400,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Aucun scan archivé',
+            style: TextStyle(
+              fontSize: 16,
+              color: isDark ? Colors.white54 : Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Importez le contrat signé pour l\'archiver.',
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? Colors.white38 : Colors.grey.shade500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScanPreview(bool isDark) {
+    final isPdf = _scanPath != null &&
+        _scanPath!.toLowerCase().endsWith('.pdf');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Aperçu image ou icône PDF
+        Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxHeight: 400),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.04) : Colors.grey[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? Colors.green.withOpacity(0.3) : Colors.green.shade200,
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: isPdf
+                ? _buildPdfPreview(isDark)
+                : _buildImagePreview(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Chemin fichier
+        if (_scanPath != null)
+          Row(
+            children: [
+              Icon(Icons.attach_file, size: 14, color: Colors.grey.shade500),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  _scanPath!.split('/').last,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.white54 : Colors.grey.shade600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _buildImagePreview() {
+    if (_scanBytes == null) return const SizedBox.shrink();
+    return InteractiveViewer(
+      child: Image.memory(
+        _scanBytes!,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stack) => const Center(
+          child: Text(
+            'Impossible d\'afficher l\'image.',
+            style: TextStyle(color: Colors.red),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPdfPreview(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.picture_as_pdf, size: 64, color: Colors.red.shade400),
+          const SizedBox(height: 12),
+          Text(
+            'Document PDF archivé',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _scanPath!.split('/').last,
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? Colors.white38 : Colors.grey,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: () => _openLocalFile(_scanPath!),
+            icon: const Icon(Icons.open_in_new, size: 16),
+            label: const Text('Ouvrir le fichier'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openLocalFile(String path) {
+    // Sur desktop (macOS) : ouvre avec l'application par défaut
+    if (!kIsWeb) {
+      try {
+        Process.run('open', [path]);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Impossible d\'ouvrir le fichier : $e')),
+          );
+        }
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------ TAB: Suivi terrain
+
   Widget _buildFollowupItem(
     DateTime date,
     String title,
@@ -659,6 +1057,51 @@ class _LoanDetailDialogState extends State<LoanDetailDialog>
     );
   }
 
+  // ------------------------------------------------------------------ Contrat PDF
+
+  Future<void> _generateContractPdf() async {
+    if (_contractGenerating) return;
+    setState(() => _contractGenerating = true);
+
+    try {
+      final path = await LoanContractTemplateService()
+          .generateLoanContract(widget.loanId);
+
+      if (!mounted) return;
+      setState(() => _contractGenerating = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Contrat généré : ${path.split('/').last}'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Ouvrir',
+            textColor: Colors.white,
+            onPressed: () {
+              if (!kIsWeb) {
+                try {
+                  Process.run('open', [path]);
+                } catch (_) {}
+              }
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _contractGenerating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur génération contrat : $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ------------------------------------------------------------------ FOOTER
+
   Widget _buildActionFooter() {
     return Padding(
       padding: const EdgeInsets.only(top: 16),
@@ -693,6 +1136,29 @@ class _LoanDetailDialogState extends State<LoanDetailDialog>
             () {},
           ),
           const Spacer(),
+          // Bouton Générer Contrat PDF (Exigences 7.1 / 7.2)
+          OutlinedButton.icon(
+            onPressed: _contractGenerating ? null : _generateContractPdf,
+            icon: _contractGenerating
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.picture_as_pdf_outlined),
+            label: Text(
+              _contractGenerating ? 'Génération…' : 'Générer Contrat PDF',
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
           ElevatedButton.icon(
             onPressed: () async {
               final result = await showDialog<bool>(

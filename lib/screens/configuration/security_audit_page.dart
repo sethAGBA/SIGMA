@@ -6,6 +6,7 @@ import '../../core/services/database_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/utils/audit_field_utils.dart';
 import '../../models/audit_log_model.dart';
+import '../../models/user_model.dart';
 import 'package:intl/intl.dart';
 
 class SecurityAuditPage extends StatefulWidget {
@@ -31,6 +32,65 @@ class _SecurityAuditPageState extends State<SecurityAuditPage>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _loadLogs();
+    _logDesktopSessionIfNeeded();
+  }
+
+  Future<void> _logDesktopSessionIfNeeded() async {
+    if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) return;
+    final role = AuthService().currentRole;
+    if (role != SystemRole.superAdmin &&
+        role != SystemRole.directeurFinancier) {
+      return;
+    }
+
+    await DatabaseService().insertAuditLog(
+      AuditLog(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        userId: AuthService().currentUserId,
+        username: auditFieldValue(AuthService().currentUsername),
+        action: 'SQLITE_UNENCRYPTED_DESKTOP',
+        details: 'Session démarrée sur Desktop — base SQLite non chiffrée.',
+        timestamp: DateTime.now(),
+        severity: AuditSeverity.medium,
+      ),
+    );
+    if (mounted) _loadLogs();
+  }
+
+  Widget _buildDesktopWarningBanner() {
+    if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      width: double.infinity,
+      color: Colors.amber.shade100,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: const Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+          SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Base de données locale non chiffrée',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Contrainte technique : sqflite_common_ffi (Desktop) ne supporte pas '
+                  'SQLCipher. Chiffrement actif sur Android/iOS uniquement. '
+                  'Recommandation : activez le chiffrement disque système '
+                  '(BitLocker sous Windows, FileVault sous macOS, LUKS sous Linux).',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadLogs() async {
@@ -129,12 +189,19 @@ class _SecurityAuditPageState extends State<SecurityAuditPage>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Column(
         children: [
-          _buildLogsTab(),
-          _buildBackupsTab(),
-          _buildSecuritySettingsTab(),
+          _buildDesktopWarningBanner(),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildLogsTab(),
+                _buildBackupsTab(),
+                _buildSecuritySettingsTab(),
+              ],
+            ),
+          ),
         ],
       ),
     );

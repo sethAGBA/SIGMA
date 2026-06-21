@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:path/path.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sigma/models/agent_model.dart';
@@ -40,6 +41,8 @@ import '../../models/sync_queue_entry.dart';
 import '../../models/sync_conflict_model.dart';
 import '../../models/field_snapshot_meta_model.dart';
 import '../../models/plan_comptable_type.dart';
+import 'key_derivation_service.dart';
+import 'database_cipher.dart' if (dart.library.js) 'database_cipher_stub.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting, debugPrint;
 import 'package:flutter/material.dart' show Icons, Color;
 
@@ -49,6 +52,25 @@ class DatabaseService {
   DatabaseService._internal();
 
   static Database? _database;
+
+  @visibleForTesting
+  static bool? forceMobilePlatformForTesting;
+
+  @visibleForTesting
+  Future<String> Function()? databaseKeyProviderOverride;
+
+  @visibleForTesting
+  Future<Database> Function({
+    required String path,
+    required String password,
+    required int version,
+    required Future<void> Function(Database db, int version) onCreate,
+    required Future<void> Function(Database db, int oldVersion, int newVersion)
+        onUpgrade,
+  })? mobileOpenOverride;
+
+  @visibleForTesting
+  static String? lastPlatformBranchForTesting;
 
   /// Injecte une base de données externe (ex: base en mémoire pour les tests).
   /// À utiliser uniquement dans les tests.
@@ -61,8 +83,12 @@ class DatabaseService {
   @visibleForTesting
   static void resetDatabaseForTesting() {
     _database = null;
+    forceMobilePlatformForTesting = null;
+    lastPlatformBranchForTesting = null;
+    _instance.databaseKeyProviderOverride = null;
+    _instance.mobileOpenOverride = null;
   }
-  static const int _version = 32;
+  static const int _version = 33;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -74,17 +100,74 @@ class DatabaseService {
     final documentsDirectory = await getApplicationDocumentsDirectory();
     final path = join(documentsDirectory.path, 'sigma_microfinance.db');
 
-    final db = await openDatabase(
-      path,
-      version: _version,
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
-    );
+    final isMobile = forceMobilePlatformForTesting ??
+        (Platform.isAndroid || Platform.isIOS);
+    lastPlatformBranchForTesting = isMobile ? 'mobile' : 'desktop';
+
+    final db = isMobile
+        ? await _openMobileDatabase(path)
+        : await _openDesktopDatabase(path);
 
     // S'assurer qu'un admin existe même sur une base déjà créée
     await _seedDefaultAdmin(db);
 
     return db;
+  }
+
+  Future<Database> _openDesktopDatabase(String path) async {
+    return openDatabase(
+      path,
+      version: _version,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
+  }
+
+  Future<Database> _openMobileDatabase(String path) async {
+    final key = databaseKeyProviderOverride != null
+        ? await databaseKeyProviderOverride!()
+        : await KeyDerivationService().getDatabaseKey();
+    if (mobileOpenOverride != null) {
+      return mobileOpenOverride!(
+        path: path,
+        password: key,
+        version: _version,
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
+      );
+    }
+    return openEncryptedDatabase(
+      path: path,
+      password: key,
+      version: _version,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
+  }
+
+  @visibleForTesting
+  String platformBranchForTesting() {
+    final isMobile = forceMobilePlatformForTesting ??
+        (Platform.isAndroid || Platform.isIOS);
+    return isMobile ? 'mobile' : 'desktop';
+  }
+
+  @visibleForTesting
+  Future<Database> openMobileDatabaseForTesting(String path) =>
+      _openMobileDatabase(path);
+
+  @visibleForTesting
+  Future<Database> openDesktopDatabaseForTesting(String path) =>
+      _openDesktopDatabase(path);
+
+  @visibleForTesting
+  Future<Database> resolvePlatformDatabaseForTesting(String path) async {
+    final isMobile = forceMobilePlatformForTesting ??
+        (Platform.isAndroid || Platform.isIOS);
+    lastPlatformBranchForTesting = isMobile ? 'mobile' : 'desktop';
+    return isMobile
+        ? _openMobileDatabase(path)
+        : _openDesktopDatabase(path);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -242,6 +325,21 @@ class DatabaseService {
 
     if (oldVersion < 32) {
       await _applyPhase6Schema(db);
+    }
+
+    if (oldVersion < 33) {
+      await _addColumnIfNotExists(
+        db,
+        'prets',
+        'contrat_scan_path',
+        'TEXT',
+      );
+      await _addColumnIfNotExists(
+        db,
+        'prets',
+        'contrat_scan_base64',
+        'TEXT',
+      );
     }
   }
 
@@ -656,6 +754,10 @@ class DatabaseService {
         statut TEXT,
         agent_gestionnaire TEXT,
         agence_gestion TEXT,
+        mois_differe_capital INTEGER DEFAULT 0,
+        contrat_signe INTEGER DEFAULT 0,
+        contrat_scan_path TEXT,
+        contrat_scan_base64 TEXT,
         FOREIGN KEY (demande_pret_id) REFERENCES demandes_pret (id),
         FOREIGN KEY (client_id) REFERENCES clients (id),
         FOREIGN KEY (produit_id) REFERENCES produits_financiers (id)
@@ -1527,6 +1629,52 @@ class DatabaseService {
     );
     if (maps.isEmpty) return null;
     return Loan.fromMap(maps.first);
+  }
+
+  /// Sauvegarde le chemin et le contenu Base64 du scan du contrat signé.
+  Future<void> saveLoanContractScan(
+    int loanId,
+    String path,
+    String base64,
+  ) async {
+    final db = await database;
+    await db.update(
+      'prets',
+      {
+        'contrat_scan_path': path,
+        'contrat_scan_base64': base64,
+      },
+      where: 'id = ?',
+      whereArgs: [loanId],
+    );
+  }
+
+  /// Retourne le chemin et le Base64 du scan du contrat lié au prêt,
+  /// ou `{path: null, base64: null}` si aucun scan n'est archivé.
+  Future<Map<String, String?>> getLoanContractScan(int loanId) async {
+    final db = await database;
+    final rows = await db.query(
+      'prets',
+      columns: ['contrat_scan_path', 'contrat_scan_base64'],
+      where: 'id = ?',
+      whereArgs: [loanId],
+    );
+    if (rows.isEmpty) return {'path': null, 'base64': null};
+    return {
+      'path': rows.first['contrat_scan_path'] as String?,
+      'base64': rows.first['contrat_scan_base64'] as String?,
+    };
+  }
+
+  /// Supprime le scan du contrat lié au prêt (remet les deux colonnes à NULL).
+  Future<void> deleteLoanContractScan(int loanId) async {
+    final db = await database;
+    await db.update(
+      'prets',
+      {'contrat_scan_path': null, 'contrat_scan_base64': null},
+      where: 'id = ?',
+      whereArgs: [loanId],
+    );
   }
 
   Future<List<Loan>> getLoans({String? status}) async {

@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/services/database_service.dart';
+import '../../core/services/savings_api_service.dart';
 import '../../models/savings_account_model.dart';
 import 'open_savings_account_dialog.dart';
 import '../../widgets/dialogs/savings_account_detail_dialog.dart';
@@ -33,7 +33,7 @@ class _SavingsListPageState extends State<SavingsListPage> {
 
   void _refresh() {
     setState(() {
-      _accountsFuture = DatabaseService().getSavingsAccounts();
+      _accountsFuture = SavingsApiService().getComptes();
     });
   }
 

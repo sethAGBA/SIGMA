@@ -1,150 +1,150 @@
 1   ; CAPITAUX PERMANENTS
 10  ; Capital et dotations
 101 ; Capital social
-1011; Parts sociales souscrites appelées versées
-1012; Parts sociales souscrites appelées non versées
+1011; Parts sociales souscrites appelÃ©es versÃ©es
+1012; Parts sociales souscrites appelÃ©es non versÃ©es
 1013; Parts sociales amorties
 102 ; Dotations
 1021; Dotation initiale
-1022; Dotations complémentaires
-11  ; Réserves
-111 ; Réserves légales
-112 ; Réserves statutaires
-113 ; Réserves réglementées
-118 ; Autres réserves
-12  ; Report à nouveau
-121 ; Report à nouveau créditeur
-129 ; Report à nouveau débiteur
-13  ; Résultat net de l'exercice
-131 ; Résultat net bénéfice
-139 ; Résultat net perte
+1022; Dotations complÃ©mentaires
+11  ; RÃ©serves
+111 ; RÃ©serves lÃ©gales
+112 ; RÃ©serves statutaires
+113 ; RÃ©serves rÃ©glementÃ©es
+118 ; Autres rÃ©serves
+12  ; Report Ã  nouveau
+121 ; Report Ã  nouveau crÃ©diteur
+129 ; Report Ã  nouveau dÃ©biteur
+13  ; RÃ©sultat net de l'exercice
+131 ; RÃ©sultat net bÃ©nÃ©fice
+139 ; RÃ©sultat net perte
 14  ; Subventions d'investissement
-15  ; Provisions réglementées
-16  ; Emprunts et dettes assimilées
+15  ; Provisions rÃ©glementÃ©es
+16  ; Emprunts et dettes assimilÃ©es
 161 ; Emprunts obligataires
-162 ; Emprunts auprès des établissements de crédit
-163 ; Emprunts et dettes financières diverses
-17  ; Dettes rattachées à des participations
-18  ; Comptes de liaison des établissements et succursales
+162 ; Emprunts auprÃ¨s des Ã©tablissements de crÃ©dit
+163 ; Emprunts et dettes financiÃ¨res diverses
+17  ; Dettes rattachÃ©es Ã  des participations
+18  ; Comptes de liaison des Ã©tablissements et succursales
 2   ; IMMOBILISATIONS
 20  ; Immobilisations incorporelles
-201 ; Frais d'établissement
-203 ; Frais de recherche et développement
+201 ; Frais d'Ã©tablissement
+203 ; Frais de recherche et dÃ©veloppement
 205 ; Concessions et droits similaires
 21  ; Immobilisations corporelles
 211 ; Terrains
-212 ; Agencements et aménagements de terrains
+212 ; Agencements et amÃ©nagements de terrains
 213 ; Constructions
-214 ; Matériel
-215 ; Matériel de transport
+214 ; MatÃ©riel
+215 ; MatÃ©riel de transport
 218 ; Autres immobilisations corporelles
 22  ; Immobilisations mises en concession
 23  ; Immobilisations en cours
-24  ; Immobilisations financières
+24  ; Immobilisations financiÃ¨res
 25  ; Amortissements des immobilisations
-26  ; Provisions pour dépréciation des immobilisations
-3   ; VALEURS ET CRÉANCES
-30  ; Créances rattachées à des participations
-31  ; Autres créances
+26  ; Provisions pour dÃ©prÃ©ciation des immobilisations
+3   ; VALEURS ET CRÃ‰ANCES
+30  ; CrÃ©ances rattachÃ©es Ã  des participations
+31  ; Autres crÃ©ances
 32  ; Stocks et en-cours
-33  ; Créances sur l'État
-34  ; Créances sur les organismes faîtiers
-35  ; Créances sur le personnel
-36  ; Créances sur les associés
-37  ; Autres comptes débiteurs
-38  ; Charges constatées d'avance
-39  ; Provisions pour dépréciation des comptes de l'actif circulant
+33  ; CrÃ©ances sur l'Ã‰tat
+34  ; CrÃ©ances sur les organismes faÃ®tiers
+35  ; CrÃ©ances sur le personnel
+36  ; CrÃ©ances sur les associÃ©s
+37  ; Autres comptes dÃ©biteurs
+38  ; Charges constatÃ©es d'avance
+39  ; Provisions pour dÃ©prÃ©ciation des comptes de l'actif circulant
 4   ; COMPTES DE TIERS
-40  ; Membres et clients - créditeurs
-401 ; Membres - épargne bloquée
-402 ; Clients divers - créditeurs
-41  ; Membres et clients - débiteurs
-411 ; Membres - créances diverses
-412 ; Clients divers - débiteurs
+40  ; Membres et clients - crÃ©diteurs
+401 ; Membres - Ã©pargne bloquÃ©e
+402 ; Clients divers - crÃ©diteurs
+41  ; Membres et clients - dÃ©biteurs
+411 ; Membres - crÃ©ances diverses
+412 ; Clients divers - dÃ©biteurs
 42  ; Personnel
-421 ; Personnel - rémunérations dues
+421 ; Personnel - rÃ©munÃ©rations dues
 422 ; Personnel - avances et acomptes
 43  ; Organismes sociaux
-431 ; Sécurité sociale
-44  ; État et collectivités publiques
-441 ; État - impôts et taxes
-445 ; État - TVA
-45  ; Associés et groupe
-46  ; Débiteurs et créditeurs divers
+431 ; SÃ©curitÃ© sociale
+44  ; Ã‰tat et collectivitÃ©s publiques
+441 ; Ã‰tat - impÃ´ts et taxes
+445 ; Ã‰tat - TVA
+45  ; AssociÃ©s et groupe
+46  ; DÃ©biteurs et crÃ©diteurs divers
 47  ; Comptes transitoires ou d'attente
-48  ; Comptes de régularisation
+48  ; Comptes de rÃ©gularisation
 49  ; Provisions pour risques et charges
 5   ; COMPTES FINANCIERS
-50  ; Valeurs mobilières et créances assimilées
-501 ; Crédits à la clientèle
-5011; Crédits à court terme
-5012; Crédits à moyen terme
-5013; Crédits à long terme
-5014; Crédits de campagne
-502 ; Créances rattachées aux crédits
-5021; Intérêts courus sur crédits
-5022; Pénalités courues sur crédits
-503 ; Titres de créances négociables
-51  ; Valeurs mobilières de placement
-52  ; Dépôts reçus
-521 ; Dépôts à vue
-5211; Comptes épargne à vue
-5212; Comptes épargne obligatoire
+50  ; Valeurs mobiliÃ¨res et crÃ©ances assimilÃ©es
+501 ; CrÃ©dits Ã  la clientÃ¨le
+5011; CrÃ©dits Ã  court terme
+5012; CrÃ©dits Ã  moyen terme
+5013; CrÃ©dits Ã  long terme
+5014; CrÃ©dits de campagne
+502 ; CrÃ©ances rattachÃ©es aux crÃ©dits
+5021; IntÃ©rÃªts courus sur crÃ©dits
+5022; PÃ©nalitÃ©s courues sur crÃ©dits
+503 ; Titres de crÃ©ances nÃ©gociables
+51  ; Valeurs mobiliÃ¨res de placement
+52  ; DÃ©pÃ´ts reÃ§us
+521 ; DÃ©pÃ´ts Ã  vue
+5211; Comptes Ã©pargne Ã  vue
+5212; Comptes Ã©pargne obligatoire
 5213; Comptes DAT
-522 ; Dépôts à terme
-523 ; Dépôts de garantie
-53  ; Trésorerie
+522 ; DÃ©pÃ´ts Ã  terme
+523 ; DÃ©pÃ´ts de garantie
+53  ; TrÃ©sorerie
 530 ; Caisse
 5301; Caisse principale
 5302; Caisses secondaires
-5303; Billets et pièces BCEAO
+5303; Billets et piÃ¨ces BCEAO
 531 ; Comptes bancaires
 5311; Banques locales - compte courant
 5312; Compte BCEAO
 5313; Banques - comptes devises
-532 ; Banques - comptes d'épargne
-54  ; Instruments de trésorerie
-55  ; Dépôts à terme et opérations assimilées
-56  ; Banques - crédits de trésorerie
-57  ; Caisse des dépôts et consignations
+532 ; Banques - comptes d'Ã©pargne
+54  ; Instruments de trÃ©sorerie
+55  ; DÃ©pÃ´ts Ã  terme et opÃ©rations assimilÃ©es
+56  ; Banques - crÃ©dits de trÃ©sorerie
+57  ; Caisse des dÃ©pÃ´ts et consignations
 58  ; Virements internes
-59  ; Provisions pour dépréciation des comptes financiers
-591; Provisions pour dépréciation des crédits
+59  ; Provisions pour dÃ©prÃ©ciation des comptes financiers
+591; Provisions pour dÃ©prÃ©ciation des crÃ©dits
 6   ; CHARGES
 60  ; Charges d'exploitation
 601 ; Achats de marchandises
-602 ; Charges d'intérêts sur dépôts
-6021; Intérêts sur épargne à vue
-6022; Intérêts sur DAT
+602 ; Charges d'intÃ©rÃªts sur dÃ©pÃ´ts
+6021; IntÃ©rÃªts sur Ã©pargne Ã  vue
+6022; IntÃ©rÃªts sur DAT
 603 ; Variations de stocks
 604 ; Transports
-605 ; Services extérieurs
-606 ; Impôts et taxes
+605 ; Services extÃ©rieurs
+606 ; ImpÃ´ts et taxes
 607 ; Autres charges externes
 61  ; Transferts de charges
 62  ; Autres charges externes
 63  ; Charges de personnel
 64  ; Charges sociales
 65  ; Autres charges de gestion courante
-66  ; Charges financières
+66  ; Charges financiÃ¨res
 67  ; Charges exceptionnelles
 68  ; Dotations aux amortissements et provisions
 681 ; Dotations aux amortissements
 687 ; Dotations aux provisions
-69  ; Participation des salariés - impôts sur les bénéfices
+69  ; Participation des salariÃ©s - impÃ´ts sur les bÃ©nÃ©fices
 7   ; PRODUITS
 70  ; Produits d'exploitation
-701 ; Intérêts sur crédits
-7011; Intérêts sur crédits court terme
-7012; Intérêts sur crédits moyen terme
-7013; Intérêts sur crédits long terme
-702 ; Commissions sur opérations
-703 ; Commissions et pénalités perçues
-7031; Pénalités de retard
+701 ; IntÃ©rÃªts sur crÃ©dits
+7011; IntÃ©rÃªts sur crÃ©dits court terme
+7012; IntÃ©rÃªts sur crÃ©dits moyen terme
+7013; IntÃ©rÃªts sur crÃ©dits long terme
+702 ; Commissions sur opÃ©rations
+703 ; Commissions et pÃ©nalitÃ©s perÃ§ues
+7031; PÃ©nalitÃ©s de retard
 7032; Frais de dossier
 704 ; Produits accessoires
-71  ; Production stockée
-72  ; Production immobilisée
+71  ; Production stockÃ©e
+72  ; Production immobilisÃ©e
 73  ; Variations de stocks
 74  ; Subventions d'exploitation
 75  ; Autres produits de gestion courante
@@ -152,25 +152,25 @@
 77  ; Produits exceptionnels
 78  ; Reprises sur amortissements et provisions
 79  ; Transferts de charges
-8   ; HORS ACTIVITÉS ORDINAIRES
-80  ; Charges hors activités ordinaires
-81  ; Produits hors activités ordinaires
-82  ; Charges sur exercices antérieurs
-83  ; Produits sur exercices antérieurs
-84  ; Dotations hors activités ordinaires
-85  ; Reprises hors activités ordinaires
+8   ; HORS ACTIVITÃ‰S ORDINAIRES
+80  ; Charges hors activitÃ©s ordinaires
+81  ; Produits hors activitÃ©s ordinaires
+82  ; Charges sur exercices antÃ©rieurs
+83  ; Produits sur exercices antÃ©rieurs
+84  ; Dotations hors activitÃ©s ordinaires
+85  ; Reprises hors activitÃ©s ordinaires
 86  ; Participation des travailleurs
-87  ; Impôts sur le résultat
-88  ; Résultat hors activités ordinaires
+87  ; ImpÃ´ts sur le rÃ©sultat
+88  ; RÃ©sultat hors activitÃ©s ordinaires
 89  ; Comptes de liaison
 9   ; COMPTES ANALYTIQUES ET DE GESTION
 90  ; Engagements obtenus
-91  ; Engagements accordés
-92  ; Comptes réfléchis
+91  ; Engagements accordÃ©s
+92  ; Comptes rÃ©flÃ©chis
 93  ; Comptes de reclassement
-94  ; Comptes de coûts
+94  ; Comptes de coÃ»ts
 95  ; Comptes de stocks
-96  ; Comptes d'écarts sur coûts préétablis
-97  ; Comptes de différences de traitement comptable
-98  ; Comptes de résultats
+96  ; Comptes d'Ã©carts sur coÃ»ts prÃ©Ã©tablis
+97  ; Comptes de diffÃ©rences de traitement comptable
+98  ; Comptes de rÃ©sultats
 99  ; Comptes de liaisons internes

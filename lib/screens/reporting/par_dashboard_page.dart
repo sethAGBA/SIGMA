@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/services/database_service.dart';
+import '../../core/services/reporting_api_service.dart';
 import '../../core/services/pdf_export_service.dart';
 import '../../models/par_stats_model.dart';
 import 'delinquent_loans_list_page.dart';
@@ -17,7 +17,7 @@ class PARDashboardPage extends StatefulWidget {
 }
 
 class _PARDashboardPageState extends State<PARDashboardPage> {
-  final DatabaseService _db = DatabaseService();
+  final ReportingApiService _reporting = ReportingApiService();
   final PdfExportService _pdfService = PdfExportService();
   final currencyFormat = NumberFormat.currency(
     symbol: 'FCFA',
@@ -37,7 +37,7 @@ class _PARDashboardPageState extends State<PARDashboardPage> {
   Future<void> _loadStats() async {
     setState(() => _isLoading = true);
     try {
-      final stats = await _db.getPARStats();
+      final stats = await _reporting.getParStats();
       setState(() {
         _stats = stats;
         _isLoading = false;

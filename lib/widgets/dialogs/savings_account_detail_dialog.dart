@@ -7,6 +7,7 @@ import '../../core/services/database_service.dart';
 import '../../models/savings_account_model.dart';
 import '../../models/savings_transaction_model.dart';
 import '../../screens/epargne/savings_operation_dialog.dart';
+import '../../core/services/savings_statement_service.dart';
 
 class SavingsAccountDetailDialog extends StatefulWidget {
   final SavingsAccount account;
@@ -160,6 +161,26 @@ class _SavingsAccountDetailDialogState extends State<SavingsAccountDetailDialog>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
           ),
+          const SizedBox(width: 12),
+          ElevatedButton.icon(
+            onPressed: () => _generateStatement(),
+            icon: const Icon(
+              Icons.picture_as_pdf_rounded,
+              size: 20,
+              color: Colors.white,
+            ),
+            label: const Text(
+              'RELEVÉ',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+          ),
           const SizedBox(width: 16),
           IconButton(
             icon: const Icon(Icons.close_rounded),
@@ -170,8 +191,41 @@ class _SavingsAccountDetailDialogState extends State<SavingsAccountDetailDialog>
     );
   }
 
-  void _openOperation(SavingsTransactionType type) async {
-    final result = await showDialog<bool>(
+  void _generateStatement() async {
+    final now = DateTime.now();
+    int selectedMonth = now.month;
+    int selectedYear = now.year;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => _MonthPickerDialog(
+        initialMonth: selectedMonth,
+        initialYear: selectedYear,
+        onConfirm: (m, y) {
+          selectedMonth = m;
+          selectedYear = y;
+        },
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final service = SavingsStatementService();
+      await service.printStatement(_account.id!, selectedMonth, selectedYear);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur génération relevé : $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _openOperation(SavingsTransactionType type) async {    final result = await showDialog<bool>(
       context: context,
       builder: (context) =>
           SavingsOperationDialog(account: _account, initialType: type),
@@ -480,6 +534,96 @@ class _SavingsAccountDetailDialogState extends State<SavingsAccountDetailDialog>
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Dialog sélection mois/année ───────────────────────────────────────────
+
+class _MonthPickerDialog extends StatefulWidget {
+  final int initialMonth;
+  final int initialYear;
+  final void Function(int month, int year) onConfirm;
+
+  const _MonthPickerDialog({
+    required this.initialMonth,
+    required this.initialYear,
+    required this.onConfirm,
+  });
+
+  @override
+  State<_MonthPickerDialog> createState() => _MonthPickerDialogState();
+}
+
+class _MonthPickerDialogState extends State<_MonthPickerDialog> {
+  late int _month;
+  late int _year;
+
+  static const _months = [
+    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _month = widget.initialMonth;
+    _year = widget.initialYear;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Choisir la période'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DropdownButtonFormField<int>(
+            value: _month,
+            decoration: const InputDecoration(
+              labelText: 'Mois',
+              border: OutlineInputBorder(),
+            ),
+            items: List.generate(
+              12,
+              (i) => DropdownMenuItem(
+                value: i + 1,
+                child: Text(_months[i]),
+              ),
+            ),
+            onChanged: (v) => setState(() => _month = v!),
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<int>(
+            value: _year,
+            decoration: const InputDecoration(
+              labelText: 'Année',
+              border: OutlineInputBorder(),
+            ),
+            items: List.generate(
+              10,
+              (i) => DropdownMenuItem(
+                value: DateTime.now().year - i,
+                child: Text('${DateTime.now().year - i}'),
+              ),
+            ),
+            onChanged: (v) => setState(() => _year = v!),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Annuler'),
+        ),
+        FilledButton(
+          onPressed: () {
+            widget.onConfirm(_month, _year);
+            Navigator.pop(context, true);
+          },
+          child: const Text('Générer'),
+        ),
+      ],
     );
   }
 }

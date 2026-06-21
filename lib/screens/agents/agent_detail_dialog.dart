@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/agent_model.dart';
-import '../../core/services/database_service.dart';
+import '../../core/services/agency_api_service.dart';
 import '../../models/agency_model.dart';
 
 class AgentDetailDialog extends StatefulWidget {
@@ -25,7 +25,7 @@ class _AgentDetailDialogState extends State<AgentDetailDialog> {
 
   Future<void> _loadAgency() async {
     try {
-      final agencies = await DatabaseService().getAgencies();
+      final agencies = await AgencyApiService().getAgencies();
       final agency = agencies.firstWhere(
         (a) => a.id == widget.agent.agencyId,
         orElse: () => Agency(

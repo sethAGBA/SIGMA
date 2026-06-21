@@ -5,8 +5,7 @@
 // Phase 3 — Exigences 9.1, 9.2, 9.3, 9.4, 9.5, 9.6
 
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
-import '../services/database_service.dart';
+import '../services/dashboard_api_service.dart';
 import '../../models/dashboard_data.dart';
 
 class DashboardNotifier extends ChangeNotifier {
@@ -77,91 +76,6 @@ class DashboardNotifier extends ChangeNotifier {
   // ── Logique de chargement (reproduit _loadData de DashboardPage) ──────────
 
   Future<HomeDashboardData> _fetchData() async {
-    final serverAvailable = await ApiService().isServerAvailable();
-
-    if (serverAvailable) {
-      // CONNECTÉ → données du serveur enrichies avec les données locales
-      final apiData = await _loadFromApi();
-      if (apiData != null) {
-        final localData = await DatabaseService().getHomeDashboardData();
-        return HomeDashboardData(
-          kpis: apiData.kpis,
-          portfolioData: localData.portfolioData,
-          alerts: {...apiData.alerts, ...localData.alerts}.toList(),
-          topAgents: localData.topAgents,
-        );
-      } else {
-        // API disponible mais réponse vide → fallback local
-        return await DatabaseService().getHomeDashboardData();
-      }
-    } else {
-      // OFFLINE → cache local uniquement
-      return await DatabaseService().getHomeDashboardData();
-    }
-  }
-
-  Future<HomeDashboardData?> _loadFromApi() async {
-    final response = await ApiService().get('/reporting/dashboard');
-    final data = ApiService.decodeResponse(response);
-    if (data == null) return null;
-
-    final kpis = <DashboardKPI>[
-      DashboardKPI(
-        title: 'Clients Actifs',
-        value: '${data['clients_actifs'] ?? 0}',
-        variation: '+0',
-        isPositive: true,
-        icon: const IconData(0xe7fd, fontFamily: 'MaterialIcons'), // people_rounded
-        color: const Color(0xFF3B82F6),
-      ),
-      DashboardKPI(
-        title: 'Encours Total',
-        value: _formatAmount((data['encours_total'] as num?)?.toDouble() ?? 0),
-        variation: '+0%',
-        isPositive: true,
-        icon: const IconData(0xe84f, fontFamily: 'MaterialIcons'), // account_balance_wallet_rounded
-        color: const Color(0xFF10B981),
-      ),
-      DashboardKPI(
-        title: 'PAR > 30j',
-        value: '${data['taux_remboursement'] ?? 0}%',
-        variation: 'Normal',
-        isPositive: true,
-        icon: const IconData(0xe8e4, fontFamily: 'MaterialIcons'), // trending_down_rounded
-        color: const Color(0xFFF59E0B),
-      ),
-      DashboardKPI(
-        title: 'Prêts Actifs',
-        value: '${data['prets_actifs'] ?? 0}',
-        variation: '0',
-        isPositive: true,
-        icon: const IconData(0xef63, fontFamily: 'MaterialIcons'), // payments_rounded
-        color: const Color(0xFF8B5CF6),
-      ),
-    ];
-
-    final alerts = <AlertItem>[];
-    final pretsEnRetard = (data['prets_en_retard'] as num?)?.toInt() ?? 0;
-    if (pretsEnRetard > 0) {
-      alerts.add(AlertItem(
-        title: '$pretsEnRetard prêts en retard',
-        description: 'Actions de recouvrement requises',
-        level: AlertLevel.warning,
-        icon: const IconData(0xe002, fontFamily: 'MaterialIcons'), // warning_rounded
-      ));
-    }
-
-    return HomeDashboardData(
-      kpis: kpis,
-      portfolioData: [],
-      alerts: alerts,
-      topAgents: [],
-    );
-  }
-
-  String _formatAmount(double amount) {
-    if (amount >= 1000000) return '${(amount / 1000000).toStringAsFixed(1)}M';
-    if (amount >= 1000) return '${(amount / 1000).toStringAsFixed(0)}k';
-    return amount.toStringAsFixed(0);
+    return DashboardApiService().getKpis();
   }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/agent_model.dart';
-import '../../core/services/database_service.dart';
+import '../../core/services/agency_api_service.dart';
 import 'agent_form_dialog.dart';
 import 'agent_detail_dialog.dart';
 
@@ -28,7 +28,7 @@ class _AgentListPageState extends State<AgentListPage> {
   Future<void> _loadAgents() async {
     setState(() => _isLoading = true);
     try {
-      final agents = await DatabaseService().getAgents();
+      final agents = await AgencyApiService().getAgents();
       setState(() {
         _agents = agents;
         _filteredAgents = agents;

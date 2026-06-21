@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/services/cash_api_service.dart';
 import '../../core/services/database_service.dart';
 import 'cash_transfer_dialog.dart';
 
@@ -33,7 +34,7 @@ class _VaultManagementPageState extends State<VaultManagementPage> {
   void _refresh() {
     setState(() {
       _vaultStatsFuture = _loadVaultStats();
-      _recentTransfersFuture = DatabaseService().getOperationsCaisse(
+      _recentTransfersFuture = CashApiService().getOperationsCaisse(
         limit: 10,
         // Manual filter for transfers category will be done in UI
       );

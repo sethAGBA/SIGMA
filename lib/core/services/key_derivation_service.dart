@@ -6,6 +6,7 @@
 // ne supporte pas SQLCipher sans compilation C++ native).
 
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Exception levée si le stockage sécurisé est inaccessible.
@@ -24,9 +25,24 @@ class KeyDerivationService {
   KeyDerivationService._internal();
 
   static const String _saltKey = 'db_encryption_salt';
+  static const String _dbKeySecret = 'sigma_db_key';
   static const _storage = FlutterSecureStorage();
 
-  // ── API publique ────────────────────────────────────────────────────────
+  /// Clé AES pour SQLCipher — indépendante des tokens JWT (Phase 1, req. 6.4).
+  Future<String> getDatabaseKey() async {
+    try {
+      String? secret = await _storage.read(key: _dbKeySecret);
+      if (secret == null || secret.isEmpty) {
+        secret = _generateRandomSecret();
+        await _storage.write(key: _dbKeySecret, value: secret);
+      }
+      return _deriveKeyFromSecret(secret);
+    } catch (e) {
+      throw EncryptionKeyException(
+        'Impossible de dériver la clé de chiffrement : $e',
+      );
+    }
+  }
 
   /// Retourne la clé de chiffrement dérivée pour [username].
   ///
@@ -59,6 +75,14 @@ class KeyDerivationService {
   }
 
   // ── Implémentation interne ──────────────────────────────────────────────
+
+  String _generateRandomSecret() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(32, (_) => random.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  String _deriveKeyFromSecret(String secret) => _deriveKey('sigma_db', secret);
 
   /// Génère un sel pseudo-aléatoire de 32 caractères hex.
   /// Basé sur le timestamp microseconde et le hashcode du username.

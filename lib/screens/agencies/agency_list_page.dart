@@ -3,7 +3,7 @@ import '../../core/theme/app_colors.dart';
 import '../../models/agency_model.dart';
 import '../../widgets/dialogs/agency_detail_dialog.dart';
 import 'package:intl/intl.dart';
-import '../../core/services/database_service.dart';
+import '../../core/services/agency_api_service.dart';
 import '../../widgets/dialogs/agency_form_dialog.dart';
 
 class AgencyListPage extends StatefulWidget {
@@ -32,7 +32,7 @@ class _AgencyListPageState extends State<AgencyListPage> {
   Future<void> _loadAgencies() async {
     setState(() => _isLoading = true);
     try {
-      final agencies = await DatabaseService().getAgencies();
+      final agencies = await AgencyApiService().getAgencies();
       setState(() {
         _agencies = agencies;
         _isLoading = false;

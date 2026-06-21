@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/services/database_service.dart';
+import '../../core/services/cash_api_service.dart';
 import 'cash_transfer_dialog.dart';
 
 class CashTransferListPage extends StatefulWidget {
@@ -33,7 +33,7 @@ class _CashTransferListPageState extends State<CashTransferListPage> {
 
   void _refresh() {
     setState(() {
-      _transfersFuture = DatabaseService().getOperationsCaisse(
+      _transfersFuture = CashApiService().getOperationsCaisse(
         type: null, // Both ENTREE and SORTIE are transfers
         startDate: _startDate,
         endDate: _endDate,

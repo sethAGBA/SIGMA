@@ -7,6 +7,8 @@ import 'package:printing/printing.dart';
 import '../../models/loan_request_model.dart';
 import '../../models/par_stats_model.dart';
 import '../../models/reporting/monthly_report_model.dart';
+import '../../models/repayment_schedule_model.dart';
+import '../../core/utils/loan_calculator.dart';
 import 'database_service.dart';
 import 'institution_pdf_branding.dart';
 
@@ -18,7 +20,7 @@ class PdfExportService {
   );
   final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
 
-  Future<void> exportLoanContract(LoanRequest request) async {
+  Future<pw.Document> buildLoanContractPdf(LoanRequest request) async {
     final client = request.client;
     final produit = request.produit;
     final clientName = client?.nomComplet ?? 'Client #${request.clientId}';
@@ -31,6 +33,15 @@ class PdfExportService {
       documentTitle: 'CONTRAT DE PRÊT',
       subtitle: 'Date : $dateStr',
     );
+
+    // Fetch real schedule if loan exists, otherwise calculate from parameters
+    List<RepaymentSchedule> dbSchedule = [];
+    if (request.id != null) {
+      final loan = await DatabaseService().getLoanByRequestId(request.id!);
+      if (loan != null) {
+        dbSchedule = await DatabaseService().getRepaymentSchedules(loan.id!);
+      }
+    }
 
     final pdf = pw.Document();
     pdf.addPage(
@@ -70,6 +81,12 @@ class PdfExportService {
               'Informer l\'Institution de tout changement significatif de situation.',
               'Respecter les garanties et conditions du produit sélectionné.',
             ]),
+            pw.SizedBox(height: 16),
+            // Article 4 — Garanties
+            _buildGuaranteesSection(request),
+            pw.SizedBox(height: 20),
+            // Table d'amortissement
+            _buildAmortizationTable(request, dbSchedule),
             pw.SizedBox(height: 40),
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -90,7 +107,9 @@ class PdfExportService {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text(
-                      'SIGMA Micro-Finance',
+                      legal.raisonSociale.isNotEmpty
+                          ? legal.raisonSociale
+                          : 'SIGMA Micro-Finance',
                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                     ),
                     pw.SizedBox(height: 40),
@@ -104,12 +123,177 @@ class PdfExportService {
         },
       ),
     );
+    return pdf;
+  }
 
+  Future<void> exportLoanContract(LoanRequest request) async {
+    final client = request.client;
+    final pdf = await buildLoanContractPdf(request);
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
       name:
           'Contrat_Pret_${client?.nom ?? request.clientId}_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
     );
+  }
+
+  pw.Widget _buildGuaranteesSection(LoanRequest request) {
+    final List<String> lines = [];
+
+    if (request.typeGarantie != null && request.typeGarantie!.isNotEmpty) {
+      lines.add('Type de garantie : ${request.typeGarantie}');
+    }
+    if (request.descriptionGarantie != null &&
+        request.descriptionGarantie!.isNotEmpty) {
+      lines.add('Désignation : ${request.descriptionGarantie}');
+    }
+    if (request.valeurGarantie != null && request.valeurGarantie! > 0) {
+      lines.add(
+          'Valeur d\'expertise : ${currencyFormat.format(request.valeurGarantie!)}');
+    }
+    if (request.cautionPersonnelle != null &&
+        request.cautionPersonnelle!.isNotEmpty) {
+      lines.add('Caution personnelle : ${request.cautionPersonnelle}');
+    }
+    if (lines.isEmpty) {
+      lines.add('Aucune garantie enregistrée pour ce dossier.');
+    }
+
+    return _buildContractSection('Article 4 — Garanties', lines);
+  }
+
+  pw.Widget _buildAmortizationTable(
+    LoanRequest request,
+    List<RepaymentSchedule> dbSchedule,
+  ) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'Annexe — Table d\'amortissement',
+          style:
+              pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.grey400),
+          columnWidths: {
+            0: const pw.FixedColumnWidth(28),
+            1: const pw.FixedColumnWidth(60),
+            2: const pw.FlexColumnWidth(2),
+            3: const pw.FlexColumnWidth(2),
+            4: const pw.FlexColumnWidth(2),
+            5: const pw.FlexColumnWidth(2),
+          },
+          children: [
+            // Header row
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(
+                  color: PdfColors.blueGrey100),
+              children: [
+                _buildAmortCell('N°', isHeader: true),
+                _buildAmortCell('Date prévue', isHeader: true),
+                _buildAmortCell('Capital', isHeader: true,
+                    align: pw.TextAlign.right),
+                _buildAmortCell('Intérêts', isHeader: true,
+                    align: pw.TextAlign.right),
+                _buildAmortCell('Total dû', isHeader: true,
+                    align: pw.TextAlign.right),
+                _buildAmortCell('Cap. restant', isHeader: true,
+                    align: pw.TextAlign.right),
+              ],
+            ),
+            // Data rows from DB schedule if available, else compute
+            if (dbSchedule.isNotEmpty)
+              ...dbSchedule.map(
+                (s) => pw.TableRow(
+                  children: [
+                    _buildAmortCell('${s.numeroEcheance}'),
+                    _buildAmortCell(
+                        DateFormat('dd/MM/yyyy').format(s.datePrevue)),
+                    _buildAmortCell(
+                        _formatPdfAmount(s.capitalDu),
+                        align: pw.TextAlign.right),
+                    _buildAmortCell(
+                        _formatPdfAmount(s.interetsDus),
+                        align: pw.TextAlign.right),
+                    _buildAmortCell(
+                        _formatPdfAmount(s.totalDu),
+                        align: pw.TextAlign.right),
+                    _buildAmortCell(
+                        _formatPdfAmount(s.capitalRestant),
+                        align: pw.TextAlign.right),
+                  ],
+                ),
+              )
+            else
+              ..._buildCalculatedRows(request),
+          ],
+        ),
+      ],
+    );
+  }
+
+  List<pw.TableRow> _buildCalculatedRows(LoanRequest request) {
+    final rows = LoanCalculator.calculerEcheancierAvecDiffere(
+      montant: request.montantDemande,
+      duree: request.dureeMois,
+      tauxAnnuel: request.produit?.tauxInteret ?? 0,
+      moisDiffere: request.moisDiffereCapital,
+    );
+
+    double capitalRestant = request.montantDemande;
+    final startDate = DateTime.now();
+    final tableRows = <pw.TableRow>[];
+
+    for (int i = 0; i < rows.length; i++) {
+      final row = rows[i];
+      final capital = row['capital_du'] ?? 0;
+      capitalRestant = (capitalRestant - capital).clamp(0, double.infinity);
+      final echeanceDate =
+          DateTime(startDate.year, startDate.month + i + 1, startDate.day);
+      tableRows.add(
+        pw.TableRow(
+          children: [
+            _buildAmortCell('${i + 1}'),
+            _buildAmortCell(DateFormat('dd/MM/yyyy').format(echeanceDate)),
+            _buildAmortCell(_formatPdfAmount(capital),
+                align: pw.TextAlign.right),
+            _buildAmortCell(
+                _formatPdfAmount(row['interets_dus'] ?? 0),
+                align: pw.TextAlign.right),
+            _buildAmortCell(
+                _formatPdfAmount(row['total_du'] ?? 0),
+                align: pw.TextAlign.right),
+            _buildAmortCell(_formatPdfAmount(capitalRestant),
+                align: pw.TextAlign.right),
+          ],
+        ),
+      );
+    }
+    return tableRows;
+  }
+
+  pw.Widget _buildAmortCell(
+    String text, {
+    bool isHeader = false,
+    pw.TextAlign align = pw.TextAlign.left,
+  }) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+      child: pw.Text(
+        text,
+        textAlign: align,
+        style: pw.TextStyle(
+          fontSize: 8,
+          fontWeight:
+              isHeader ? pw.FontWeight.bold : pw.FontWeight.normal,
+        ),
+      ),
+    );
+  }
+
+  String _formatPdfAmount(double amount) {
+    return NumberFormat('#,##0', 'fr_FR').format(amount);
   }
 
   pw.Widget _buildContractSection(String title, List<String> lines) {

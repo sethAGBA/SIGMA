@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/services/database_service.dart';
+import '../../core/services/cash_api_service.dart';
 import '../../models/cash_closing_model.dart';
 import 'cash_closing_dialog.dart';
 
@@ -34,7 +34,7 @@ class _CashClosingListPageState extends State<CashClosingListPage> {
 
   void _refresh() {
     setState(() {
-      _closingsFuture = DatabaseService().getCashClosings(
+      _closingsFuture = CashApiService().getCloturesFiltered(
         startDate: _startDate,
         endDate: _endDate,
       );

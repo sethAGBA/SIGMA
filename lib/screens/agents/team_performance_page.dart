@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/services/agency_api_service.dart';
 import '../../core/services/database_service.dart';
 import '../../models/agent_model.dart';
 import '../../models/agent_stats_model.dart';
@@ -31,7 +32,7 @@ class _TeamPerformancePageState extends State<TeamPerformancePage> {
     setState(() => _isLoading = true);
     try {
       final globalStats = await DatabaseService().getGlobalTeamStats();
-      final agents = await DatabaseService().getAgents();
+      final agents = await AgencyApiService().getAgents();
 
       // Sort agents by a score or PAR by default
       agents.sort((a, b) => a.stats.parRatio.compareTo(b.stats.parRatio));

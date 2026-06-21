@@ -81,7 +81,115 @@ SERVER_PORT=8000
 
 ## Installation et démarrage sur votre PC (développement)
 
-### Étape 1 — Créer la base PostgreSQL
+---
+
+### 🍎 macOS
+
+#### Étape 1 — Installer PostgreSQL via Homebrew
+
+```bash
+# Installer Homebrew si absent
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Installer PostgreSQL 15
+brew install postgresql@15
+
+# Démarrer PostgreSQL (et l'activer au démarrage)
+brew services start postgresql@15
+
+# Vérifier que PostgreSQL répond
+pg_isready -h localhost -p 5432
+```
+
+#### Étape 2 — Créer la base et l'utilisateur
+
+```bash
+# Se connecter à PostgreSQL (avec votre user système)
+psql -h localhost -d postgres
+
+# Dans le shell psql, exécuter :
+CREATE USER sigma_user WITH PASSWORD 'SigmaMF2024!';
+\q
+
+# Créer la base (en dehors de psql, depuis le terminal)
+psql -h localhost -d postgres -c "CREATE DATABASE sigma_db OWNER sigma_user;"
+psql -h localhost -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE sigma_db TO sigma_user;"
+```
+
+> La base s'appelle `sigma_db` — ne pas confondre avec `sigma_microfinance.db` qui est le fichier SQLite local de Flutter.
+
+#### Étape 3 — Configurer l'environnement Python
+
+```bash
+cd ~/development/SIGMA/backend
+
+python3 -m venv venv
+source venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+#### Étape 4 — Configurer le `.env`
+
+```bash
+cp .env.example .env
+```
+
+Ouvrir `.env` et vérifier/modifier :
+
+```env
+DATABASE_URL=postgresql://sigma_user:SigmaMF2024!@localhost:5432/sigma_db
+SECRET_KEY=SigmaMicroFinance-SecretKey-2024-LAN-Server-Secure
+```
+
+#### Étape 5 — Créer le compte admin
+
+```bash
+# Depuis le dossier backend/ avec le venv activé
+python install/create_admin.py
+```
+
+Cela crée le compte admin par défaut (`admin` / `Admin2024!`).
+
+> ℹ️ Sur macOS, les tables sont créées automatiquement au premier démarrage du serveur (`create_tables()` dans le lifespan). Pas besoin de lancer `alembic upgrade head` tant que les migrations Alembic ne sont pas encore écrites.
+
+#### Étape 6 — Démarrer le serveur
+
+```bash
+# S'assurer d'être dans le bon dossier
+cd ~/development/SIGMA/backend
+
+# Activer le venv si pas encore fait
+source venv/bin/activate
+
+# Démarrer le serveur avec hot-reload
+venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Vérifier que ça fonctionne :
+
+```bash
+curl http://localhost:8000/health
+# → {"status":"ok","service":"SIGMA API"}
+```
+
+Ou ouvrir dans le navigateur : `http://localhost:8000/docs`
+
+#### Relancer le serveur les prochaines fois
+
+```bash
+cd ~/development/SIGMA/backend
+source venv/bin/activate
+venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+> ⚠️ Si PostgreSQL ne répond plus : `brew services restart postgresql@15`
+
+---
+
+### 🪟 Windows
+
+#### Étape 1 — Créer la base PostgreSQL
 
 Ouvrir **pgAdmin 4** sur votre machine, se connecter avec :
 
@@ -104,7 +212,7 @@ GRANT ALL PRIVILEGES ON DATABASE sigma_db TO sigma_user;
 
 > La base s'appelle `sigma_db` — ne pas confondre avec `sigma_microfinance.db` qui est le fichier SQLite local de Flutter.
 
-### Étape 2 — Configurer l'environnement Python
+#### Étape 2 — Configurer l'environnement Python
 
 ```bash
 cd c:\Users\LEGION\Desktop\Project\SIGMA\backend
@@ -115,7 +223,7 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Étape 3 — Configurer le `.env`
+#### Étape 3 — Configurer le `.env`
 
 ```bash
 copy .env.example .env
@@ -128,16 +236,13 @@ DATABASE_URL=postgresql://sigma_user:SigmaMF2024!@localhost:5432/sigma_db
 SECRET_KEY=SigmaMicroFinance-SecretKey-2024-LAN-Server-Secure
 ```
 
-### Étape 4 — Initialiser la base de données
+#### Étape 4 — Créer le compte admin
 
 ```bash
-alembic upgrade head
 python install/create_admin.py
 ```
 
-Cela crée toutes les tables et le compte admin par défaut (`admin` / `Admin2024!`).
-
-### Étape 5 — Démarrer le serveur
+#### Étape 5 — Démarrer le serveur
 
 ⚠️ **Important** : la commande doit être lancée depuis le dossier `backend\`, pas depuis la racine du projet.
 
@@ -254,9 +359,14 @@ backend/
 | `monthly_interests` | 01h00 le 1er du mois | Capitalise les intérêts sur comptes épargne |
 | `nightly_scoring` | 02h00 chaque jour | Recalcule les scores crédit clients |
 
-#  
+---
 
-  Invoke-RestMethod -Uri "http://localhost:8000/api/v1/auth/login" -Method POST -ContentType "application/json" -Body '{"username":"admin","password":"Admin2024!"}'
+## Tests rapides PowerShell (Windows)
 
+```powershell
+# Login et récupération du token
+Invoke-RestMethod -Uri "http://localhost:8000/api/v1/auth/login" -Method POST -ContentType "application/json" -Body '{"username":"admin","password":"Admin2024!"}'
 
-  cd "c:\Users\LEGION\Desktop\Project\SIGMA" ; Start-Sleep -Seconds 4; Invoke-RestMethod -Uri "http://localhost:8000/health" -Method GET
+# Vérification que le serveur répond
+cd "c:\Users\LEGION\Desktop\Project\SIGMA" ; Start-Sleep -Seconds 4; Invoke-RestMethod -Uri "http://localhost:8000/health" -Method GET
+```

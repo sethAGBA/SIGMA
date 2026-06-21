@@ -6,6 +6,7 @@ import '../core/services/theme_service.dart';
 import '../core/services/auth_service.dart';
 import '../models/user_model.dart';
 import '../screens/auth/login_page.dart';
+import 'sidebar_config.dart';
 
 class Sidebar extends StatelessWidget {
   final int selectedIndex;
@@ -42,352 +43,7 @@ class Sidebar extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               children: [
-                _buildNavItem(
-                  context,
-                  0,
-                  Icons.dashboard_rounded,
-                  'Tableau de Bord',
-                ),
-
-                _buildSectionTitle(context, 'GESTION CLIENTS'),
-                _buildNavItem(
-                  context,
-                  1,
-                  Icons.people_rounded,
-                  'Registre des clients',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  2,
-                  Icons.groups_rounded,
-                  'Groupes solidaires',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  3,
-                  Icons.person_add_rounded,
-                  'Nouveau client',
-                  isSubItem: true,
-                ),
-
-                _buildSectionTitle(context, 'PORTEFEUILLE CRÉDIT'),
-                _buildNavItem(
-                  context,
-                  4,
-                  Icons.request_page_rounded,
-                  'Demandes de prêt',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  5,
-                  Icons.account_balance_wallet_rounded,
-                  'Prêts en cours',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  6,
-                  Icons.calendar_month_rounded,
-                  'Échéancier global',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  7,
-                  Icons.sync_rounded,
-                  'Restructurations',
-                  isSubItem: true,
-                ),
-
-                _buildSectionTitle(context, 'REMBOURSEMENTS'),
-                _buildNavItem(
-                  context,
-                  8,
-                  Icons.payments_rounded,
-                  'Collecte du jour',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  9,
-                  Icons.history_rounded,
-                  'Historique paiements',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  10,
-                  Icons.warning_rounded,
-                  'Retards & relances',
-                  isSubItem: true,
-                ),
-
-                _buildSectionTitle(context, 'ÉPARGNE'),
-                _buildNavItem(
-                  context,
-                  11,
-                  Icons.savings_rounded,
-                  'Comptes épargne',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  12,
-                  Icons.swap_horiz_rounded,
-                  'Transactions épargne',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  13,
-                  Icons.category_rounded,
-                  'Produits d\'épargne',
-                  isSubItem: true,
-                ),
-
-                _buildSectionTitle(context, 'CAISSE & TRÉSORERIE'),
-                _buildNavItem(
-                  context,
-                  14,
-                  Icons.point_of_sale_rounded,
-                  'Opérations de caisse',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  15,
-                  Icons.lock_clock_rounded,
-                  'Clôture journalière',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  16,
-                  Icons.compare_arrows_rounded,
-                  'Transferts inter-agences',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  17,
-                  Icons.shield,
-                  'Coffre-fort',
-                  isSubItem: true,
-                ),
-
-                _buildSectionTitle(context, 'QUALITÉ PORTEFEUILLE'),
-                _buildNavItem(
-                  context,
-                  18,
-                  Icons.analytics_rounded,
-                  'Tableau PAR',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  19,
-                  Icons.error_outline_rounded,
-                  'Créances en souffrance',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  20,
-                  Icons.gavel_rounded,
-                  'Actions de recouvrement',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  21,
-                  Icons.shield_rounded,
-                  'Provisions',
-                  isSubItem: true,
-                ),
-
-                _buildSectionTitle(context, 'COMPTABILITÉ'),
-                _buildNavItem(
-                  context,
-                  22,
-                  Icons.account_tree_rounded,
-                  'Plan comptable',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  23,
-                  Icons.book_rounded,
-                  'Journal des écritures',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  24,
-                  Icons.library_books_rounded,
-                  'Grand livre',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  25,
-                  Icons.balance_rounded,
-                  'Balance',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  26,
-                  Icons.description_rounded,
-                  'États financiers',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  27,
-                  Icons.lock_reset_rounded,
-                  'Clôture & fin de période',
-                  isSubItem: true,
-                ),
-
-                _buildSectionTitle(context, 'REPORTING'),
-                _buildNavItem(
-                  context,
-                  28,
-                  Icons.pie_chart_rounded,
-                  'Tableaux de bord',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  29,
-                  Icons.article_rounded,
-                  'Rapports standards',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  30,
-                  Icons.download_rounded,
-                  'Exports',
-                  isSubItem: true,
-                ),
-
-                _buildSectionTitle(context, 'AGENCES & ÉQUIPES'),
-                _buildNavItem(
-                  context,
-                  31,
-                  Icons.store_rounded,
-                  'Réseau d\'agences',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  32,
-                  Icons.badge_rounded,
-                  'Gestion des agents',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  33,
-                  Icons.trending_up_rounded,
-                  'Performance équipes',
-                  isSubItem: true,
-                ),
-
-                _buildSectionTitle(context, 'COMMUNICATIONS'),
-                _buildNavItem(
-                  context,
-                  34,
-                  Icons.sms_rounded,
-                  'Envoi SMS',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  35,
-                  Icons.notifications_rounded,
-                  'Historique notifications',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  36,
-                  Icons.message_rounded,
-                  'Templates messages',
-                  isSubItem: true,
-                ),
-
-                _buildSectionTitle(context, 'DOCUMENTS'),
-                _buildNavItem(
-                  context,
-                  37,
-                  Icons.folder_rounded,
-                  'Bibliothèque documents',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  38,
-                  Icons.description_rounded,
-                  'Contrats types',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  39,
-                  Icons.verified_rounded,
-                  'Attestations',
-                  isSubItem: true,
-                ),
-
-                _buildSectionTitle(context, 'PARAMÈTRES'),
-                _buildNavItem(
-                  context,
-                  40,
-                  Icons.settings_rounded,
-                  'Configuration Institution',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  41,
-                  Icons.account_tree_rounded,
-                  'Configuration Comptable',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  42,
-                  Icons.inventory_rounded,
-                  'Produits financiers',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  43,
-                  Icons.admin_panel_settings_rounded,
-                  'Utilisateurs & droits',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  44,
-                  Icons.backup_rounded,
-                  'Sauvegarde & sécurité',
-                  isSubItem: true,
-                ),
-                _buildNavItem(
-                  context,
-                  45,
-                  Icons.dns_rounded,
-                  'Serveur & Connexion',
-                  isSubItem: true,
-                ),
-
+                ..._buildFilteredNavItems(context),
                 const SizedBox(height: 16),
               ],
             ),
@@ -397,6 +53,47 @@ class Sidebar extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  List<Widget> _buildFilteredNavItems(BuildContext context) {
+    final auth = AuthService();
+    final widgets = <Widget>[];
+
+    if (auth.canAccessModule(kDashboardEntry.module)) {
+      widgets.add(
+        _buildNavItem(
+          context,
+          kDashboardEntry.index,
+          kDashboardEntry.icon,
+          kDashboardEntry.label,
+          isSubItem: kDashboardEntry.isSubItem,
+        ),
+      );
+    }
+
+    for (final section in kAllSidebarSections) {
+      final visibleEntries = section.entries
+          .where((e) => auth.canAccessModule(e.module))
+          .toList();
+      if (visibleEntries.isEmpty) continue;
+
+      if (section.title != null) {
+        widgets.add(_buildSectionTitle(context, section.title!));
+      }
+      for (final entry in visibleEntries) {
+        widgets.add(
+          _buildNavItem(
+            context,
+            entry.index,
+            entry.icon,
+            entry.label,
+            isSubItem: entry.isSubItem,
+          ),
+        );
+      }
+    }
+
+    return widgets;
   }
 
   Widget _buildSectionTitle(BuildContext context, String title) {

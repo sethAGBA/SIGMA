@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../core/services/database_service.dart';
+import '../../core/services/accounting_api_service.dart';
 import '../../core/services/regulatory_export_service.dart';
 import '../../models/trial_balance_model.dart';
 
@@ -14,7 +14,7 @@ class BalanceGeneralePage extends StatefulWidget {
 }
 
 class _BalanceGeneralePageState extends State<BalanceGeneralePage> {
-  final DatabaseService _db = DatabaseService();
+  final AccountingApiService _accounting = AccountingApiService();
   final RegulatoryExportService _exportService = RegulatoryExportService();
   final currencyFormat = NumberFormat.currency(
     symbol: 'FCFA',
@@ -36,7 +36,7 @@ class _BalanceGeneralePageState extends State<BalanceGeneralePage> {
   Future<void> _loadBalance() async {
     setState(() => _isLoading = true);
     try {
-      final balance = await _db.getTrialBalance(
+      final balance = await _accounting.getBalance(
         dateDebut: _dateDebut,
         dateFin: _dateFin,
       );

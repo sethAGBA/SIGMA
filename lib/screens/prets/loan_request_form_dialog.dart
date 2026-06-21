@@ -5,6 +5,9 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import '../../core/services/client_api_service.dart';
+import '../../core/services/products_api_service.dart';
+import '../../core/services/configuration_api_service.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/location_service.dart';
 import '../../models/client_model.dart';
@@ -82,10 +85,11 @@ class _LoanRequestFormDialogState extends State<LoanRequestFormDialog> {
   }
 
   Future<void> _loadInitialData() async {
-    final clients = await DatabaseService().getClients();
-    final products = await DatabaseService().getProduits(
-      type: ProductType.credit,
-    );
+    final clients = await ClientApiService().searchClients();
+    final allProducts = await ProductsApiService().getProducts();
+    final products =
+        allProducts.where((p) => p.type == ProductType.credit).toList();
+    await ConfigurationApiService().getConfiguration();
     final finParams = await DatabaseService().getFinancialParameters();
     setState(() {
       _clients = clients;

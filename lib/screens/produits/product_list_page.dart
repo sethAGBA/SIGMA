@@ -1,7 +1,7 @@
 ﻿// lib/screens/produits/product_list_page.dart
 
 import 'package:flutter/material.dart';
-import '../../core/services/database_service.dart';
+import '../../core/services/products_api_service.dart';
 import '../../models/produit_financier_model.dart';
 import '../../core/theme/app_colors.dart';
 import '../../widgets/dialogs/product_form_dialog.dart';
@@ -29,8 +29,12 @@ class _ProductListPageState extends State<ProductListPage>
 
   void _refreshProducts() {
     setState(() {
-      _creditsFuture = DatabaseService().getProduits(type: ProductType.credit);
-      _savingsFuture = DatabaseService().getProduits(type: ProductType.epargne);
+      _creditsFuture = ProductsApiService()
+          .getProducts()
+          .then((p) => p.where((x) => x.type == ProductType.credit).toList());
+      _savingsFuture = ProductsApiService()
+          .getProducts()
+          .then((p) => p.where((x) => x.type == ProductType.epargne).toList());
     });
   }
 
@@ -163,7 +167,7 @@ class _ProductListPageState extends State<ProductListPage>
     );
 
     if (confirm == true && product.id != null) {
-      await DatabaseService().deleteProduit(product.id!);
+      await ProductsApiService().deleteProduct(product.id!);
       _refreshProducts();
     }
   }

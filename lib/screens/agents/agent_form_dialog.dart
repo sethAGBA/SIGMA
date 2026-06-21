@@ -3,6 +3,7 @@ import '../../core/theme/app_colors.dart';
 import '../../models/agent_model.dart';
 import '../../models/agency_model.dart';
 import '../../models/accounting_account_model.dart';
+import '../../core/services/agency_api_service.dart';
 import '../../core/services/database_service.dart';
 
 class AgentFormDialog extends StatefulWidget {
@@ -48,7 +49,7 @@ class _AgentFormDialogState extends State<AgentFormDialog> {
 
   Future<void> _loadData() async {
     try {
-      final agencies = await DatabaseService().getAgencies();
+      final agencies = await AgencyApiService().getAgencies();
       AccountingAccount? account;
 
       if (widget.agent?.associatedAccountId != null) {
