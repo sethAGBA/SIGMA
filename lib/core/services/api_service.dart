@@ -51,13 +51,25 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString(_prefKeyUrl);
     if (saved != null && saved.isNotEmpty) {
-      _baseUrl = saved;
+      _baseUrl = _normalizeBaseUrl(saved);
     }
     _accessToken = await _storage.read(key: accessTokenKey);
   }
 
+  /// Garantit que l'URL pointe vers le préfixe API `/api/v1`.
+  static String _normalizeBaseUrl(String url) {
+    var normalized = url.trim().replaceAll(RegExp(r'/$'), '');
+    if (!normalized.endsWith('/api/v1')) {
+      normalized = '$normalized/api/v1';
+    }
+    return normalized;
+  }
+
+  @visibleForTesting
+  static String normalizeBaseUrlForTesting(String url) => _normalizeBaseUrl(url);
+
   Future<void> setServerUrl(String url) async {
-    _baseUrl = url.trimRight().replaceAll(RegExp(r'/$'), '');
+    _baseUrl = _normalizeBaseUrl(url);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefKeyUrl, _baseUrl);
   }
@@ -117,10 +129,15 @@ class ApiService {
         final access = data['access_token'] as String?;
         final refresh = data['refresh_token'] as String?;
         if (access != null) {
-          await persistTokens(
-            accessToken: access,
-            refreshToken: refresh,
-          );
+          try {
+            await persistTokens(
+              accessToken: access,
+              refreshToken: refresh,
+            );
+          } catch (_) {
+            // Token en mémoire même si le secure storage échoue (ex. desktop).
+            _accessToken = access;
+          }
         }
         return data;
       }

@@ -12,6 +12,10 @@
 	<true/>
 	<key>com.apple.security.files.user-selected.write</key>
 	<true/>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)$(CFBundleIdentifier)</string>
+	</array>
 	<key>com.apple.security.print</key>
 	<true/>
 </dict>

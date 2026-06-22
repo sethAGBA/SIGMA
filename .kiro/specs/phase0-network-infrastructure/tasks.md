@@ -247,7 +247,7 @@ Cette phase connecte l'application Flutter SIGMA Micro-Finance à son backend Fa
     - Documenter la séquence dans un commentaire bloc dans `main()`
     - _Requirements: 3.1_
 
-- [~] 9. Checkpoint final — Validation complète
+- [ ] 9. Checkpoint final — Validation complète
   - Lancer `flutter analyze` depuis la racine du projet — zéro erreur
   - Lancer `flutter test --reporter=expanded` — tous les tests passent
   - Sur le backend, activer le venv et lancer `alembic upgrade head` sur `sigma_db` — vérifier les 10 migrations

@@ -172,10 +172,20 @@ class HomeDashboardData {
   final List<AlertItem> alerts;
   final List<AgentPerformance> topAgents;
 
+  // Phase 2 — BottomStatsBar
+  final double encours; // Encours total portefeuille (FCFA)
+  // Phase 2 — BottomStatsBar
+  final double collecteJour; // Collecte du jour (FCFA)
+  // Phase 2 — BottomStatsBar
+  final double par30; // PAR > 30 jours (%)
+
   HomeDashboardData({
     required this.kpis,
     required this.portfolioData,
     required this.alerts,
     required this.topAgents,
+    this.encours = 0.0,
+    this.collecteJour = 0.0,
+    this.par30 = 0.0,
   });
 }

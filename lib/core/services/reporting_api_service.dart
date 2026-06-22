@@ -123,6 +123,9 @@ class ReportingApiService {
       portfolioData: portfolioData,
       alerts: alerts,
       topAgents: topAgents,
+      encours: (json['encours_total'] as num?)?.toDouble() ?? 0.0, // Phase 2 — BottomStatsBar
+      collecteJour: (json['collecte_jour'] as num?)?.toDouble() ?? 0.0, // Phase 2 — BottomStatsBar
+      par30: (json['par30_rate'] as num?)?.toDouble() ?? 0.0, // Phase 2 — BottomStatsBar
     );
   }
 

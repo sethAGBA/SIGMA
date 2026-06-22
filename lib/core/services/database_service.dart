@@ -3309,11 +3309,17 @@ class DatabaseService {
       );
     }
 
+    final double collecteJourValue =
+        (k['daily_collection'] as num?)?.toDouble() ?? 0.0;
+
     return HomeDashboardData(
       kpis: kpis,
       portfolioData: portfolioData,
       alerts: alerts,
       topAgents: topAgents,
+      encours: totalOut, // Phase 2 — BottomStatsBar
+      collecteJour: collecteJourValue, // Phase 2 — BottomStatsBar
+      par30: parRate, // Phase 2 — BottomStatsBar
     );
   }
 
@@ -4434,5 +4440,74 @@ class DatabaseService {
     );
     if (maps.isEmpty) return null;
     return FieldSnapshotMeta.fromMap(maps.first);
+  }
+
+  // ── Groupe Solidaire Metrics ────────────────────────────────────────────────
+
+  /// Retourne la somme des soldes restants des prêts actifs (non soldés, non
+  /// passés en perte/contentieux) des membres d'un groupe solidaire.
+  /// Retourne 0.0 si aucun prêt actif ou en cas d'erreur.
+  Future<double> getGroupActiveLoansTotal(int groupId) async {
+    try {
+      final db = await database;
+      final result = await db.rawQuery('''
+        SELECT COALESCE(SUM(p.solde_restant), 0.0) AS total
+        FROM prets p
+        INNER JOIN clients c ON c.id = p.client_id
+        WHERE c.groupe_solidaire_id = ?
+          AND p.statut NOT IN ('perte', 'contentieux')
+          AND p.solde_restant > 0
+      ''', [groupId]);
+      return (result.first['total'] as num?)?.toDouble() ?? 0.0;
+    } catch (e) {
+      debugPrint('getGroupActiveLoansTotal error: $e');
+      return 0.0;
+    }
+  }
+
+  /// Retourne le taux de remboursement du groupe en pourcentage [0.0, 100.0],
+  /// ou null si aucun montant dû n'existe (pas de prêts avec échéanciers).
+  Future<double?> getGroupRepaymentRate(int groupId) async {
+    try {
+      final db = await database;
+      final result = await db.rawQuery('''
+        SELECT
+          SUM(e.total_du)   AS total_du,
+          SUM(e.total_paye) AS total_paye
+        FROM echeanciers e
+        INNER JOIN prets p ON p.id = e.pret_id
+        INNER JOIN clients c ON c.id = p.client_id
+        WHERE c.groupe_solidaire_id = ?
+      ''', [groupId]);
+
+      final totalDu = (result.first['total_du'] as num?)?.toDouble() ?? 0.0;
+      final totalPaye = (result.first['total_paye'] as num?)?.toDouble() ?? 0.0;
+
+      if (totalDu <= 0) return null;
+      return ((totalPaye / totalDu) * 100).clamp(0.0, 100.0);
+    } catch (e) {
+      debugPrint('getGroupRepaymentRate error: $e');
+      return null;
+    }
+  }
+
+  /// Retourne la liste des prêts des membres d'un groupe solidaire,
+  /// triée par date de déblocage décroissante.
+  /// Retourne une liste vide en cas d'erreur.
+  Future<List<Map<String, dynamic>>> getGroupLoans(int groupId) async {
+    try {
+      final db = await database;
+      return await db.rawQuery('''
+        SELECT p.id, p.numero_pret, c.nom, c.prenoms,
+               p.montant_initial, p.solde_restant, p.statut, p.jours_retard
+        FROM prets p
+        INNER JOIN clients c ON c.id = p.client_id
+        WHERE c.groupe_solidaire_id = ?
+        ORDER BY p.date_deblocage DESC
+      ''', [groupId]);
+    } catch (e) {
+      debugPrint('getGroupLoans error: $e');
+      return [];
+    }
   }
 }

@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import '../../core/services/group_api_service.dart';
 import '../../core/services/client_api_service.dart';
+import '../../core/services/database_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/client_model.dart';
 import '../../models/groupe_solidaire_model.dart';
@@ -285,20 +286,38 @@ class _GroupListPageState extends State<GroupListPage> {
   }
 
   Widget _buildGroupMetrics(GroupeSolidaire group) {
-    return FutureBuilder<List<Client>>(
-      future: ClientApiService().getGroupMembers(group.id!),
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait([
+        DatabaseService().getGroupActiveLoansTotal(group.id!),
+        DatabaseService().getGroupRepaymentRate(group.id!),
+        ClientApiService().getGroupMembers(group.id!),
+      ]),
       builder: (context, snapshot) {
-        final memberCount = snapshot.data?.length ?? 0;
+        final memberCount = (snapshot.data?[2] as List?)?.length ?? 0;
+        final encours = (snapshot.data?[0] as double?) ?? 0.0;
+        final tauxRate = snapshot.data?[1] as double?;
+
+        final encoursFmt = encours >= 1000000
+            ? '${(encours / 1000000).toStringAsFixed(2)} M FCFA'
+            : encours >= 1000
+                ? '${(encours / 1000).toStringAsFixed(0)} K FCFA'
+                : '${encours.toInt()} FCFA';
+
+        final tauxColor = tauxRate == null
+            ? Colors.grey
+            : tauxRate >= 90
+                ? AppColors.success
+                : tauxRate >= 70
+                    ? AppColors.warning
+                    : AppColors.error;
+        final tauxFmt = tauxRate == null ? 'N/A' : '${tauxRate.round()}%';
+
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             _buildMetricItem('MEMBRES', memberCount.toString()),
-            _buildMetricItem('ENCOURS', '0 FCFA'), // Placeholder
-            _buildMetricItem(
-              'PERF.',
-              '100%',
-              color: AppColors.success,
-            ), // Placeholder
+            _buildMetricItem('ENCOURS', encoursFmt),
+            _buildMetricItem('PERF.', tauxFmt, color: tauxColor),
           ],
         );
       },

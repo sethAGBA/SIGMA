@@ -6,7 +6,12 @@ import '../../models/communication_models.dart';
 import '../../models/client_model.dart';
 
 class SmsSendingPage extends StatefulWidget {
-  const SmsSendingPage({super.key});
+  final List<int> preSelectedClientIds;
+
+  const SmsSendingPage({
+    super.key,
+    this.preSelectedClientIds = const [],
+  });
 
   @override
   State<SmsSendingPage> createState() => _SmsSendingPageState();
@@ -22,6 +27,10 @@ class _SmsSendingPageState extends State<SmsSendingPage> {
   final TextEditingController _messageController = TextEditingController();
   bool _isSending = false;
 
+  // Bulk mode state
+  bool _isBulkMode = false;
+  List<Client> _bulkClients = [];
+
   @override
   void initState() {
     super.initState();
@@ -36,6 +45,21 @@ class _SmsSendingPageState extends State<SmsSendingPage> {
       setState(() {
         _clients = clients;
         _templates = templates;
+
+        if (widget.preSelectedClientIds.length == 1) {
+          // Pré-remplir le client unique
+          final match = _clients
+              .where((c) => c.id == widget.preSelectedClientIds.first)
+              .firstOrNull;
+          if (match != null) _selectedClient = match;
+        } else if (widget.preSelectedClientIds.length > 1) {
+          // Mode bulk
+          _isBulkMode = true;
+          _bulkClients = _clients
+              .where((c) => widget.preSelectedClientIds.contains(c.id))
+              .toList();
+        }
+
         _isLoading = false;
       });
     } catch (e) {
@@ -135,6 +159,55 @@ class _SmsSendingPageState extends State<SmsSendingPage> {
     }
   }
 
+  Future<void> _sendBulkSms() async {
+    if (_messageController.text.isEmpty) return;
+
+    setState(() => _isSending = true);
+
+    int sentCount = 0;
+    try {
+      for (final client in _bulkClients) {
+        final log = NotificationLog(
+          id: '${DateTime.now().millisecondsSinceEpoch}_${client.id}',
+          clientId: client.id.toString(),
+          recipient: client.telephone ?? 'N/A',
+          message: _messageController.text,
+          status: NotificationStatus.sent,
+          timestamp: DateTime.now(),
+          type: CommunicationType.sms,
+        );
+        await DatabaseService().insertNotificationLog(log);
+        sentCount++;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'SMS envoyés : ${_bulkClients.length}/${_bulkClients.length}'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        setState(() {
+          _messageController.clear();
+          _selectedTemplate = null;
+          _isSending = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Erreur après $sentCount envois : $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      setState(() => _isSending = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -151,7 +224,9 @@ class _SmsSendingPageState extends State<SmsSendingPage> {
                   children: [
                     _buildHeader(isDark),
                     const SizedBox(height: 32),
-                    _buildForm(isDark),
+                    _isBulkMode
+                        ? _buildBulkForm(isDark)
+                        : _buildForm(isDark),
                   ],
                 ),
               ),
@@ -175,20 +250,200 @@ class _SmsSendingPageState extends State<SmsSendingPage> {
           ),
         ),
         const SizedBox(width: 20),
-        const Column(
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Envoi de SMS',
               style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
             Text(
-              'Composez et envoyez des messages personnalisés à vos clients.',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
+              _isBulkMode
+                  ? 'Envoi groupé à ${_bulkClients.length} destinataire(s).'
+                  : 'Composez et envoyez des messages personnalisés à vos clients.',
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
             ),
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildBulkForm(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // En-tête avec le nombre de destinataires
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.group_rounded, color: AppColors.primary),
+                const SizedBox(width: 12),
+                Text(
+                  '${_bulkClients.length} destinataires sélectionnés',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Liste des destinataires
+          const Text(
+            '1. Destinataires',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            constraints: const BoxConstraints(maxHeight: 200),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.withOpacity(0.3)),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: _bulkClients.length,
+              separatorBuilder: (context, index) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final client = _bulkClients[index];
+                return ListTile(
+                  dense: true,
+                  leading: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        client.nom[0].toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  title: Text('${client.nom} ${client.prenoms}',
+                      style: const TextStyle(fontWeight: FontWeight.w500)),
+                  subtitle: Text(client.telephone ?? 'N/A'),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // Champ message
+          const Text(
+            '2. Message',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<MessageTemplate>(
+            value: _selectedTemplate,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              hintText: 'Sélectionner un modèle (optionnel)...',
+            ),
+            items: _templates.map((t) {
+              return DropdownMenuItem(value: t, child: Text(t.title));
+            }).toList(),
+            onChanged: (tmpl) {
+              setState(() {
+                _selectedTemplate = tmpl;
+                if (tmpl != null) {
+                  _messageController.text = tmpl.content;
+                }
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _messageController,
+            maxLines: 6,
+            decoration: InputDecoration(
+              hintText: 'Saisissez votre message ici...',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Icon(Icons.info_outline, size: 16, color: Colors.grey),
+              const SizedBox(width: 8),
+              Text(
+                'Taille estimée: ${_messageController.text.length} caractères (${(_messageController.text.length / 160).ceil()} SMS)',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+
+          // Bouton envoyer
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton.icon(
+              onPressed:
+                  _isSending || _messageController.text.isEmpty
+                      ? null
+                      : _sendBulkSms,
+              icon: _isSending
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.send_rounded),
+              label: Text(
+                _isSending
+                    ? 'ENVOI EN COURS...'
+                    : 'ENVOYER À ${_bulkClients.length} DESTINATAIRES',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -227,6 +482,12 @@ class _SmsSendingPageState extends State<SmsSendingPage> {
                     Autocomplete<Client>(
                       displayStringForOption: (Client c) =>
                           '${c.nom} ${c.prenoms} (${c.telephone})',
+                      initialValue: _selectedClient != null
+                          ? TextEditingValue(
+                              text:
+                                  '${_selectedClient!.nom} ${_selectedClient!.prenoms} (${_selectedClient!.telephone})',
+                            )
+                          : null,
                       optionsBuilder: (TextEditingValue textEditingValue) {
                         if (textEditingValue.text == '')
                           return const Iterable<Client>.empty();

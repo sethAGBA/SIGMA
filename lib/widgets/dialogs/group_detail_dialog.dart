@@ -661,29 +661,133 @@ class _GroupDetailDialogState extends State<GroupDetailDialog>
   }
 
   Widget _buildLoansTab() {
-    return _buildTabContainer([
-      _buildSectionHeader(
-        'État des Prêts du Groupe',
-        Icons.account_balance_wallet_rounded,
-      ),
-      _buildInfoGrid([
-        _buildInfoItem('Prêts actifs', '0 dossiers'),
-        _buildInfoItem('Encours total', '0 FCFA'),
-        _buildInfoItem('Taux de remboursement', '100%'),
-        _buildInfoItem('Capital restant dû', '0 FCFA'),
-      ]),
-      const SizedBox(height: 32),
-      _buildSectionHeader('Répartition par membre', Icons.pie_chart_rounded),
-      const Center(
-        child: Padding(
-          padding: EdgeInsets.all(32.0),
-          child: Text(
-            'Aucun prêt collectif enregistré',
-            style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: DatabaseService().getGroupLoans(_group.id!),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final loans = snapshot.data ?? [];
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSectionHeader(
+                'État des Prêts du Groupe',
+                Icons.account_balance_wallet_rounded,
+              ),
+              if (loans.isEmpty)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.0),
+                    child: Text(
+                      'Aucun prêt enregistré pour ce groupe',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: loans.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final loan = loans[index];
+                    final nom = loan['nom'] as String? ?? '—';
+                    final prenoms = loan['prenoms'] as String? ?? '';
+                    final numeroPret = loan['numero_pret'] as String? ?? '—';
+                    final montantInitial =
+                        (loan['montant_initial'] as num?)?.toDouble() ?? 0.0;
+                    final soldeRestant =
+                        (loan['solde_restant'] as num?)?.toDouble() ?? 0.0;
+                    final statut = loan['statut'] as String? ?? '—';
+                    final joursRetard =
+                        (loan['jours_retard'] as num?)?.toInt() ?? 0;
+
+                    Color statutColor;
+                    switch (statut.toLowerCase()) {
+                      case 'actif':
+                        statutColor = AppColors.success;
+                        break;
+                      case 'en_retard':
+                      case 'retard':
+                        statutColor = AppColors.warning;
+                        break;
+                      case 'solde':
+                        statutColor = Colors.grey;
+                        break;
+                      default:
+                        statutColor = AppColors.error;
+                    }
+
+                    return ListTile(
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 8),
+                      leading: CircleAvatar(
+                        backgroundColor:
+                            AppColors.primary.withOpacity(0.1),
+                        child: Text(
+                          nom.isNotEmpty ? nom[0] : '?',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      title: Text(
+                        '$nom $prenoms',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Prêt : $numeroPret'),
+                          Text(
+                            'Montant initial : ${_formatFcfa(montantInitial)} FCFA  •  Capital restant : ${_formatFcfa(soldeRestant)} FCFA',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          if (joursRetard > 0)
+                            Text(
+                              'Retard : $joursRetard jours',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.warning,
+                              ),
+                            ),
+                        ],
+                      ),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statutColor.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          statut.toUpperCase(),
+                          style: TextStyle(
+                            color: statutColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+            ],
           ),
-        ),
-      ),
-    ]);
+        );
+      },
+    );
   }
 
   Widget _buildGuaranteeTab() {
@@ -765,31 +869,93 @@ class _GroupDetailDialogState extends State<GroupDetailDialog>
   }
 
   Widget _buildPerformanceTab() {
-    return _buildTabContainer([
-      _buildSectionHeader('Performance & Indicateurs', Icons.analytics_rounded),
-      _buildInfoGrid([
-        _buildInfoItem('Taux remboursement global', '100%'),
-        _buildInfoItem('Ancienneté du groupe', '3 mois'),
-        _buildInfoItem('Stabilité membres', 'Excellente'),
-        _buildInfoItem('Niveau de risque', 'Faible'),
-      ]),
-      const SizedBox(height: 32),
-      _buildSectionHeader('Évolution du Groupe', Icons.show_chart_rounded),
-      Container(
-        height: 200,
-        decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.withOpacity(0.2)),
-        ),
-        child: const Center(
-          child: Text(
-            'Graphique de performance (En développement)',
-            style: TextStyle(color: Colors.grey, fontSize: 12),
-          ),
-        ),
-      ),
+    final groupId = _group.id!;
+    final performanceFuture = Future.wait<dynamic>([
+      DatabaseService().getGroupActiveLoansTotal(groupId),
+      DatabaseService().getGroupRepaymentRate(groupId),
+      DatabaseService().getGroupLoans(groupId),
     ]);
+
+    return FutureBuilder<List<dynamic>>(
+      future: performanceFuture,
+      builder: (context, snapshot) {
+        String encours = '—';
+        String tauxRembStr = '—';
+        String nombreActifs = '—';
+        final now = DateTime.now();
+        final moisAnciennete =
+            (now.year - _group.dateCreation.year) * 12 +
+            (now.month - _group.dateCreation.month);
+        final ancienneteStr = '$moisAnciennete mois';
+
+        if (snapshot.connectionState == ConnectionState.done &&
+            snapshot.hasData) {
+          final data = snapshot.data!;
+          final total = data[0] as double;
+          final taux = data[1] as double?;
+          final loans = data[2] as List<Map<String, dynamic>>;
+
+          encours = '${_formatFcfa(total)} FCFA';
+          tauxRembStr = taux != null
+              ? '${taux.toStringAsFixed(1)}%'
+              : '—';
+          final actifs = loans
+              .where((l) =>
+                  (l['statut'] as String?)?.toLowerCase() == 'actif' ||
+                  (l['statut'] as String?)?.toLowerCase() == 'en_retard')
+              .length;
+          nombreActifs = '$actifs dossier${actifs > 1 ? 's' : ''}';
+        }
+
+        return _buildTabContainer([
+          _buildSectionHeader(
+            'Performance & Indicateurs',
+            Icons.analytics_rounded,
+          ),
+          if (snapshot.connectionState == ConnectionState.waiting)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            _buildInfoGrid([
+              _buildInfoItem('Encours total', encours),
+              _buildInfoItem('Taux de remboursement', tauxRembStr),
+              _buildInfoItem('Nombre de prêts actifs', nombreActifs),
+              _buildInfoItem('Ancienneté du groupe', ancienneteStr),
+            ]),
+          const SizedBox(height: 32),
+          _buildSectionHeader(
+            'Évolution du Groupe',
+            Icons.show_chart_rounded,
+          ),
+          Container(
+            height: 200,
+            decoration: BoxDecoration(
+              color: Colors.grey.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.withOpacity(0.2)),
+            ),
+            child: const Center(
+              child: Text(
+                'Graphique de performance (En développement)',
+                style: TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+            ),
+          ),
+        ]);
+      },
+    );
+  }
+
+  String _formatFcfa(double value) {
+    if (value >= 1000000) {
+      return '${(value / 1000000).toStringAsFixed(2)} M';
+    } else if (value >= 1000) {
+      return '${(value / 1000).toStringAsFixed(0)} K';
+    } else {
+      return value.toStringAsFixed(0);
+    }
   }
 
   Widget _buildDocumentsTab() {

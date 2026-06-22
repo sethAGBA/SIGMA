@@ -1,6 +1,10 @@
 // lib/screens/clients/client_list_page.dart
 
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:intl/intl.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/client_api_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -8,6 +12,7 @@ import '../../core/utils/dialog_utils.dart';
 import '../../models/client_model.dart';
 import '../../widgets/dialogs/client_form_dialog.dart';
 import '../../widgets/dialogs/client_detail_dialog.dart';
+import '../communications/sms_sending_page.dart';
 
 class ClientListPage extends StatefulWidget {
   const ClientListPage({super.key});
@@ -92,7 +97,7 @@ class _ClientListPageState extends State<ClientListPage> {
             children: [
               _buildSearchBar(context),
               _buildFilterSection(context),
-              if (_isSelectionMode) _buildBatchActionBar(context),
+              if (_isSelectionMode) _buildBatchActionBar(context, clients),
               Expanded(
                 child: clients.isEmpty
                     ? _buildEmptyState(context)
@@ -251,7 +256,7 @@ class _ClientListPageState extends State<ClientListPage> {
     );
   }
 
-  Widget _buildBatchActionBar(BuildContext context) {
+  Widget _buildBatchActionBar(BuildContext context, List<Client> clients) {
     final theme = Theme.of(context);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -271,23 +276,19 @@ class _ClientListPageState extends State<ClientListPage> {
           ),
           const Spacer(),
           TextButton.icon(
-            onPressed: () {
-              // Simuler export
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Exportation des données en cours... (CSV)'),
-                ),
-              );
-            },
+            onPressed: () => _exportSelectedClients(clients),
             icon: const Icon(Icons.download_rounded),
             label: const Text('Exporter'),
           ),
           const SizedBox(width: 8),
           TextButton.icon(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Préparation de l\'envoi SMS groupé...'),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SmsSendingPage(
+                    preSelectedClientIds: _selectedClientIds.toList(),
+                  ),
                 ),
               );
             },
@@ -317,6 +318,74 @@ class _ClientListPageState extends State<ClientListPage> {
         ],
       ),
     );
+  }
+
+  String _escapeCsvField(String value) {
+    if (value.contains(',') || value.contains('"') || value.contains('\n')) {
+      return '"${value.replaceAll('"', '""')}"';
+    }
+    return value;
+  }
+
+  Future<void> _exportSelectedClients(List<Client> allClients) async {
+    if (_selectedClientIds.isEmpty) return;
+
+    final selectedClients =
+        allClients.where((c) => _selectedClientIds.contains(c.id)).toList();
+
+    try {
+      // Générer le contenu CSV avec BOM UTF-8 pour compatibilité Excel
+      final buffer = StringBuffer();
+      buffer.write('\uFEFF');
+      buffer.writeln('N° Client,Nom,Prénoms,Téléphone,Risque,Score,Statut');
+
+      for (final c in selectedClients) {
+        final fields = [
+          _escapeCsvField(c.numeroClient),
+          _escapeCsvField(c.nom),
+          _escapeCsvField(c.prenoms),
+          _escapeCsvField(c.telephone ?? ''),
+          _escapeCsvField(c.niveauRisque.label),
+          _escapeCsvField(c.scoreCredit.toString()),
+          _escapeCsvField(c.statut.label),
+        ];
+        buffer.writeln(fields.join(','));
+      }
+
+      final csvContent = buffer.toString();
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: 'Enregistrer l\'export CSV',
+        fileName: 'clients_export_$today.csv',
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+      );
+
+      if (path == null) return; // Utilisateur a annulé
+
+      await File(path).writeAsBytes(utf8.encode(csvContent));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Export réussi : ${selectedClients.length} clients exportés',
+            ),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de l\'export : $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _deleteSelectedClients() async {

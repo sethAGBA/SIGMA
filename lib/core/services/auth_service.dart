@@ -295,58 +295,66 @@ class AuthService extends ChangeNotifier {
   // ── Connexion (hybride API + SQLite) ────────────────────────────────────
 
   /// Authentifie un utilisateur.
-  /// Essaie d'abord l'API FastAPI, bascule sur SQLite si indisponible.
+  /// Essaie d'abord l'API FastAPI, bascule sur SQLite si l'API échoue ou est indisponible.
   /// Retourne null si succès, un message d'erreur sinon.
   Future<String?> login(String username, String password) async {
     if (username.trim().isEmpty || password.isEmpty) {
       return 'Veuillez saisir votre identifiant et mot de passe.';
     }
 
+    final trimmed = username.trim();
+
     // ── Tentative via l'API FastAPI (mode réseau) ──
-    final serverAvailable = await ApiService().isServerAvailable();
-    if (serverAvailable) {
-      final result = await ApiService().login(username.trim(), password);
-      if (result != null) {
-        // Créer un UserAccount local depuis la réponse API
-        final userInfo = result['user'] as Map<String, dynamic>?;
-        if (userInfo != null) {
-          _currentUser = UserAccount(
-            id: userInfo['id'] ?? '',
-            agentId: userInfo['agent_id'] ?? '',
-            username: userInfo['username'] ?? username,
-            passwordHash: '',
-            role: _roleFromString(userInfo['role'] ?? ''),
-            isActive: true,
-            createdAt: DateTime.now(),
-            permissions: ['all'],
-          );
-          _isOnlineMode = true;
-          await _persistSession(_currentUser!.id);
-          _startServerMonitor();
-          notifyListeners();
-          return null; // succès
-        }
+    if (await ApiService().isServerAvailable()) {
+      final result = await ApiService().login(trimmed, password);
+      final userInfo = result?['user'];
+      if (userInfo is Map<String, dynamic>) {
+        return _completeOnlineLogin(userInfo, trimmed);
       }
-      // Serveur disponible mais identifiants incorrects
-      return 'Identifiant ou mot de passe incorrect.';
+      // Serveur joignable mais login API refusé ou endpoint incorrect → SQLite local
     }
 
-    // ── Fallback SQLite local (mode offline) ──
+    return _loginOffline(trimmed, password);
+  }
+
+  Future<String?> _completeOnlineLogin(
+    Map<String, dynamic> userInfo,
+    String fallbackUsername,
+  ) async {
+    _currentUser = UserAccount(
+      id: userInfo['id']?.toString() ?? '',
+      agentId: userInfo['agent_id']?.toString() ?? '',
+      username: userInfo['username']?.toString() ?? fallbackUsername,
+      passwordHash: '',
+      role: _roleFromString(userInfo['role']?.toString() ?? ''),
+      isActive: true,
+      createdAt: DateTime.now(),
+      permissions: ['all'],
+    );
+    _isOnlineMode = true;
+    await _persistSession(_currentUser!.id);
+    _startServerMonitor();
+    notifyListeners();
+    return null;
+  }
+
+  Future<String?> _loginOffline(String username, String password) async {
     try {
       final user = await DatabaseService().authenticateUser(
-        username: username.trim(),
+        username: username,
         password: password,
       );
 
       if (user == null) return 'Identifiant ou mot de passe incorrect.';
-      if (!user.isActive) return 'Ce compte est désactivé. Contactez votre administrateur.';
+      if (!user.isActive) {
+        return 'Ce compte est désactivé. Contactez votre administrateur.';
+      }
 
       _currentUser = user;
       _isOnlineMode = false;
       await _persistSession(user.id);
       notifyListeners();
-      return null; // succès
-
+      return null;
     } catch (e) {
       return 'Erreur de connexion : $e';
     }
@@ -380,6 +388,7 @@ class AuthService extends ChangeNotifier {
     switch (role.toLowerCase()) {
       case 'admin':
       case 'superadmin':
+      case 'super_admin':
         return SystemRole.superAdmin;
       case 'directeur':
       case 'directeurgeneral':

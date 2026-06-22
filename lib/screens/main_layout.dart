@@ -217,11 +217,13 @@ class MainLayoutState extends State<MainLayout> {
   Widget build(BuildContext context) {
     // final theme = Theme.of(context);
 
-    return GestureDetector(
+    return Listener(
       behavior: HitTestBehavior.translucent,
-      onTap: () => SessionManager().resetTimer(),
-      onPanUpdate: (_) => SessionManager().resetTimer(),
-      child: Scaffold(
+      onPointerDown: (_) => SessionManager().resetTimer(),
+      onPointerMove: (_) => SessionManager().resetTimer(),
+      child: MouseRegion(
+        onHover: (_) => SessionManager().resetTimer(),
+        child: Scaffold(
         body: Row(
           children: [
             Sidebar(
@@ -248,6 +250,7 @@ class MainLayoutState extends State<MainLayout> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

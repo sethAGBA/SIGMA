@@ -1,49 +1,70 @@
 // lib/widgets/bottom_stats_bar.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../core/notifiers/dashboard_notifier.dart';
 import '../core/theme/app_colors.dart';
 
 class BottomStatsBar extends StatelessWidget {
   const BottomStatsBar({super.key});
 
+  /// Formate une valeur FCFA :
+  /// ≥ 1 000 000 → 'X.XX M', ≥ 1 000 → 'X K', sinon entier.
+  String _formatFcfa(double value) {
+    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(2)} M';
+    if (value >= 1000) return '${(value / 1000).toStringAsFixed(0)} K';
+    return value.toStringAsFixed(0);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    return Consumer<DashboardNotifier>(
+      builder: (context, notifier, _) {
+        final data = notifier.cachedData;
 
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(top: BorderSide(color: theme.dividerColor, width: 1)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        children: [
-          _buildStatChip(
-            context,
-            'Encours Total',
-            '15.45 M',
-            Icons.account_balance_wallet_rounded,
-            AppColors.primary,
+        final encours = data != null ? _formatFcfa(data.encours) : '--';
+        final collecte = data != null ? _formatFcfa(data.collecteJour) : '--';
+        final par = data != null ? '${data.par30.toStringAsFixed(1)}%' : '--';
+
+        final theme = Theme.of(context);
+
+        return Container(
+          height: 56,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border:
+                Border(top: BorderSide(color: theme.dividerColor, width: 1)),
           ),
-          _buildStatChip(
-            context,
-            'Collecte Jour',
-            '2.34 M',
-            Icons.analytics_rounded,
-            AppColors.secondary,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              _buildStatChip(
+                context,
+                'Encours Total',
+                encours,
+                Icons.account_balance_wallet_rounded,
+                AppColors.primary,
+              ),
+              _buildStatChip(
+                context,
+                'Collecte Jour',
+                collecte,
+                Icons.analytics_rounded,
+                AppColors.secondary,
+              ),
+              _buildStatChip(
+                context,
+                'PAR > 30j',
+                par,
+                Icons.trending_up_rounded,
+                AppColors.warning,
+              ),
+              const Spacer(),
+              _buildSyncIndicator(),
+            ],
           ),
-          _buildStatChip(
-            context,
-            'PAR > 30j',
-            '2.3%',
-            Icons.trending_up_rounded,
-            AppColors.warning,
-          ),
-          const Spacer(),
-          _buildSyncIndicator(),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -59,9 +80,9 @@ class BottomStatsBar extends StatelessWidget {
       margin: const EdgeInsets.only(right: 16),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
+        color: color.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.1)),
+        border: Border.all(color: color.withValues(alpha: 0.1)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -100,7 +121,7 @@ class BottomStatsBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.success.withOpacity(0.08),
+        color: AppColors.success.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
       ),
       child: const Row(

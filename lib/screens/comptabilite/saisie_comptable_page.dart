@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../core/services/accounting_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../models/accounting_account_model.dart';
@@ -32,6 +33,10 @@ class _SaisieComptablePageState extends State<SaisieComptablePage> {
   // Lines State
   List<LigneEntry> _lines = [];
 
+  // Attachment State
+  String? _attachedFilePath;
+  String? _attachedFileName;
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +68,47 @@ class _SaisieComptablePageState extends State<SaisieComptablePage> {
         ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
       }
     }
+  }
+
+  // --- Attachment Logic ---
+
+  Future<void> _pickAttachment() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
+    );
+
+    if (result == null || result.files.isEmpty) {
+      // User cancelled — preserve previous state, no error
+      return;
+    }
+
+    final file = result.files.first;
+
+    // Warn if file > 10 MB (non-blocking)
+    const tenMb = 10 * 1024 * 1024;
+    if (file.size > tenMb && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Fichier volumineux (> 10 Mo) — l\'import peut être lent.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+
+    setState(() {
+      _attachedFilePath = file.path;
+      _attachedFileName = file.name;
+    });
+  }
+
+  void _removeAttachment() {
+    setState(() {
+      _attachedFilePath = null;
+      _attachedFileName = null;
+    });
   }
 
   // --- Header Widgets ---
@@ -189,20 +235,43 @@ class _SaisieComptablePageState extends State<SaisieComptablePage> {
               const SizedBox(width: 16),
               Expanded(
                 flex: 1,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    // TODO: Implement scan functionality
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Fonctionnalité de scan à implémenter'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: _pickAttachment,
+                      icon: const Icon(Icons.attach_file_rounded),
+                      label: const Text('Pièce jointe'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 18),
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text('Scan'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                  ),
+                    ),
+                    if (_attachedFileName != null) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '📎 $_attachedFileName',
+                              style: const TextStyle(fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          InkWell(
+                            onTap: _removeAttachment,
+                            child: const Padding(
+                              padding: EdgeInsets.all(2.0),
+                              child: Icon(
+                                Icons.close,
+                                size: 16,
+                                color: Colors.redAccent,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],
@@ -527,6 +596,7 @@ class _SaisieComptablePageState extends State<SaisieComptablePage> {
             : 'Inconnu',
         dateSaisie: DateTime.now(),
         statut: 'VALIDE',
+        pieceJointe: _attachedFilePath,
       );
 
       final lignes = _lines
@@ -557,6 +627,8 @@ class _SaisieComptablePageState extends State<SaisieComptablePage> {
         _libelleGlobalController.clear();
         setState(() {
           _lines = [LigneEntry(), LigneEntry()];
+          _attachedFilePath = null;
+          _attachedFileName = null;
           _isLoading = false;
         });
       }

@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/session_manager.dart';
 import '../../core/theme/app_colors.dart';
 import '../main_layout.dart';
 
@@ -77,7 +78,7 @@ class _LoginPageState extends State<LoginPage>
       _animController.reset();
       _animController.forward();
     } else {
-      // Connexion réussie → naviguer vers l'app
+      SessionManager().start();
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
           pageBuilder: (_, __, ___) => const MainLayout(),

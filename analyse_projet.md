@@ -110,16 +110,18 @@ backend/
 | Élément | Description |
 |---|---|
 | ~~**Pas d'écran de login**~~ | ✅ `LoginPage` implémentée (`lib/screens/auth/login_page.dart`) |
-| **Pas de RBAC** | ⚠️ Partiel — sidebar affiche le rôle, mais aucun masquage dynamique des modules |
-| **SQLite non chiffré** | ⚠️ Partiel — `KeyDerivationService` préparé, clé non appliquée (contrainte Windows/sqflite_common_ffi) |
+| ~~**Pas de RBAC**~~ | ✅ Sidebar RBAC dynamique — masquage modules par rôle via `canAccessModule()` dans `AuthService` |
+| ~~**SQLite non chiffré**~~ | ⚠️ `KeyDerivationService` + `sqflite_sqlcipher` intégrés ; chiffrement actif Android/iOS. Sur desktop (`sqflite_common_ffi`), SQLCipher non supporté — avertissement UI affiché. Recommandation : FileVault/BitLocker au niveau système. |
 
 ### 🟠 Fonctionnel mais incomplet
 
 | Élément | Description |
 |---|---|
-| ~~**Dashboard avec mocks**~~ | ✅ Salutation + FAB dynamiques ; BottomStatsBar encore mockée |
+| ~~**Dashboard avec mocks**~~ | ✅ `BottomStatsBar` branchée sur `DashboardNotifier` (encours, collecte, PAR dynamiques) |
 | ~~**Pas de state management**~~ | ✅ `DashboardNotifier` avec Provider — cache transparent, refresh, `clearCache` sur logout |
 | ~~**Pont comptable absent**~~ | ✅ `AutomaticAccountingService` Flutter + Python branché dans déblocage, remboursement, dépôt, retrait, provisions |
+| **Migration Flutter DB→HTTP** | ⚠️ ~55-60% — clients, prêts, épargne, caisse, agences, produits, groupes, comptabilité migrés vers API ; demandes de prêt, remboursements, détail prêt, communications encore sur `DatabaseService` direct |
+| **SMS groupé** | ⚠️ UI pré-sélection fonctionnelle (`SmsSendingPage` + `_isBulkMode`), mais envoi simulé (`Future.delayed` + SnackBar "Simulé") — API SMS externe non branchée |
 
 ### 🟡 Améliorations importantes
 
@@ -127,8 +129,12 @@ backend/
 |---|---|
 | ~~**Mode offline terrain**~~ | ✅ `SyncService` + `ConnectivityMonitor` + `SyncSupervisorScreen` implémentés |
 | ~~**Pénalités automatiques**~~ | ✅ `PenaltyService` + `daily_penalties.py` job à 00h05 via APScheduler |
-| **Plan comptable RCSSFD** | ✅ Asset + preset 501/530/521, sélecteur SYSCOHADA/RCSSFD (v32). |
-| **APIs externes** | ❌ SMS et Mobile Money non branchés. |
+| ~~**Plan comptable RCSSFD**~~ | ✅ Asset + preset 501/530/521, sélecteur SYSCOHADA/RCSSFD, export réglementaire `RegulatoryExportService` |
+| ~~**Export BCEAO/Coban**~~ | ✅ `BceaoExportService` — 3 fichiers plats CSV (encours crédit, dépôts épargne, PAR) avec séparateur `\|` et BOM UTF-8 |
+| ~~**Contrats prêt PDF**~~ | ✅ `LoanContractTemplateService` — génération PDF dynamique depuis variables SQL (client, produit, échéancier, branding institution) |
+| ~~**Archivage légal contrat**~~ | ✅ Import scan (FilePicker), stockage fichier local + Base64 BDD, affiché dans `LoanDetailDialog` |
+| ~~**Relevés épargne PDF**~~ | ✅ `SavingsStatementService` — génération manuelle fonctionnelle ; ❌ déclenchement automatique mensuel planifié absent |
+| **APIs externes** | ❌ SMS (simulation), Mobile Money webhooks (absent), notifications push Flutter (package absent) |
 
 ---
 
@@ -141,10 +147,10 @@ backend/
 
 - [x] Installer et configurer PostgreSQL sur le PC serveur *(script `install_serveur.bat` + doc ; déploiement client dépendant)*
 - [x] Créer le projet backend `backend/` avec FastAPI + SQLAlchemy + Alembic *(dossier `backend/` complet, 13 routers)*
-- [ ] Migrer le schéma SQLite vers PostgreSQL (32 tables) *(modèles + `create_tables()` au démarrage ; aucun fichier `alembic/versions/*.py`)*
+- [x] Migrer le schéma SQLite vers PostgreSQL *(10 fichiers `alembic/versions/*.py` — tables clients, prêts, épargne, caisse, comptabilité, utilisateurs...)*
 - [ ] Configurer le réseau local (adresse IP fixe pour le serveur) *(documentation uniquement)*
 - [x] Créer les premières routes API REST (auth, clients, prêts) *(toutes les routes existent côté serveur)*
-- [ ] Adapter l'app Flutter : remplacer les appels `DatabaseService` directs → appels HTTP via `ApiService` *(~15 % fait : clients, dashboard, prêts, sync)*
+- [ ] Adapter l'app Flutter : remplacer les appels `DatabaseService` directs → appels HTTP via `ApiService` *(~55-60% fait : clients, prêts, épargne, caisse, agences, produits, groupes, comptabilité migrés ; demandes de prêt, remboursements, détail prêt, communications encore sur SQLite direct)*
 - [x] Implémenter le cache SQLite local côté Flutter (mode offline de base) *(`SyncService` + file d'attente SQLite)*
 
 ---
@@ -154,11 +160,11 @@ backend/
 
 - [x] **LoginPage** : créer l'écran de connexion username/password
 - [x] **AuthService** côté serveur : génération de tokens JWT + refresh token *(backend `auth.py` — `/login`, `/refresh`)*
-- [ ] **AuthService** côté Flutter : stocker le token (`shared_preferences`), intercepteur HTTP *(token JWT en mémoire seulement ; pas de refresh token côté Flutter ; pas de `flutter_secure_storage`)*
+- [x] **AuthService** côté Flutter : token JWT persisté via `flutter_secure_storage`, intercepteur HTTP 401→refresh automatique, `tryRefresh()` dans `ApiService` *(Phase 1 — complet)*
 - [x] **Remplacer les 8+ valeurs hardcodées** : `'Jean'`, `'Admin'`, `'SYSTÈME'`, `'Agent Connecté'` → utilisateur de la session courante *(Phase 2 + 2b — ~95% fait)*
-- [ ] **Sidebar RBAC** : masquage dynamique des modules selon le rôle (Agent Terrain, Caissier, Chef Agence, Directeur, Admin)
+- [x] **Sidebar RBAC** : masquage dynamique des modules selon le rôle via `canAccessModule()` — matrice `_rbacMatrix` par `SystemRole` (AgentCredit, ChefAgence, Directeur...) *(Phase 1 — complet)*
 - [x] **Timeout de session** : `Timer` global sur `GestureDetector` racine — déconnexion après X minutes d'inactivité *(`SessionManager` + `WarningDialog` implémentés)*
-- [ ] Chiffrement du cache SQLite local via `sqflite_sqlcipher` *(`KeyDerivationService` préparé ; clé non appliquée — contrainte Windows Desktop)*
+- [ ] Chiffrement du cache SQLite local via `sqflite_sqlcipher` *(`KeyDerivationService` + `sqflite_sqlcipher` intégrés ; actif sur mobile ; contrainte desktop `sqflite_common_ffi` irrésolue — mitigation : FileVault/BitLocker recommandé)*
 
 ---
 
@@ -167,18 +173,18 @@ backend/
 
 **Dashboard**
 - [x] Brancher le nom d'utilisateur sur la salutation (`'Bonjour, Jean 👋'`)
-- [ ] Brancher `BottomStatsBar` sur les vraies agrégations SQL (Encours, Collecte) *(`'15.45 M'`, `'2.34 M'`, `'2.3%'` toujours hardcodés)*
+- [x] Brancher `BottomStatsBar` sur les vraies agrégations SQL (Encours, Collecte, PAR) *(Consumer<DashboardNotifier>, formatage FCFA dynamique)*
 - [x] Ajouter le bouton FAB d'actions rapides (Nouveau client, Nouveau prêt, Opération caisse)
 
 **Clients**
-- [ ] Remplacer export CSV simulé → vrai export CSV depuis la liste filtrée *(SnackBar `'Exportation des données en cours... (CSV)'`)*
-- [ ] Remplacer SMS groupé simulé → brancher sur le module Communications *(SnackBar `'Préparation de l\'envoi SMS groupé...'`)*
+- [x] Remplacer export CSV simulé → vrai export CSV depuis la liste filtrée *(FilePicker.saveFile, UTF-8 BOM, colonnes réglementaires)*
+- [x] Remplacer SMS groupé simulé → navigation vers `SmsSendingPage` avec pré-sélection IDs *(⚠️ envoi encore simulé — API SMS non branchée)*
 
 **Groupes Solidaires**
-- [ ] Calculer dynamiquement l'encours du groupe (somme des prêts actifs des membres)
-- [ ] Calculer dynamiquement la performance du groupe (taux de remboursement réel)
-- [ ] Ajouter l'interface de suivi des réunions de groupe (présence, ordre du jour, compte-rendu)
-- [ ] Implémenter le mécanisme de caution solidaire : transfert de dette ou saisie automatique de l'épargne bloquée des membres en cas de défaut
+- [x] Calculer dynamiquement l'encours du groupe (`getGroupActiveLoansTotal`) *(FutureBuilder + Future.wait)*
+- [x] Calculer dynamiquement la performance du groupe (`getGroupRepaymentRate`) *(couleur verte/orange/rouge selon seuils)*
+- [ ] Ajouter l'interface de suivi des réunions de groupe (présence, ordre du jour, compte-rendu) *(onglet Documents dans `GroupDetailDialog` : données hardcodées statiques, bouton "Ajouter un document" vide)*
+- [ ] Implémenter le mécanisme de caution solidaire : transfert de dette ou saisie automatique de l'épargne bloquée des membres en cas de défaut *(onglet Garanties : affichage statique "Aucune intervention enregistrée")*
 
 **Caisse**
 - [x] Report du solde de la veille dans la clôture (solde initial réel)
@@ -190,7 +196,7 @@ backend/
 
 **Comptabilité**
 - [x] Remplacer `'Admin'` (×2) dans `SaisieComptablePage` par l'utilisateur connecté
-- [ ] Remplacer le bouton "Scan" simulé par l'ouverture d'un `file_picker`
+- [x] Remplacer le bouton "Scan" simulé par l'ouverture d'un `file_picker` *(icône `attach_file_rounded`, affichage nom fichier + bouton ×, stockage dans `pieceJointe`)*
 
 **Reporting**
 - [x] Corriger `DelinquentLoanDetailPage(loanId: 1)` — ID hardcodé → ID dynamique du prêt sélectionné
@@ -252,7 +258,7 @@ backend/
 - [x] Liaison groupe solidaire dynamique dans le formulaire client
 - [x] Création automatique du compte épargne obligatoire à la création du client
 - [x] Intégration caméra pour prise de photo du client en direct (`image_picker` — caméra + galerie)
-- [ ] Scan de CNI avec OCR (optionnel)
+- [ ] Scan de CNI avec OCR *(FilePicker fonctionnel, lecture OCR ML non implémentée)*
 
 ---
 
@@ -266,33 +272,45 @@ backend/
 
 ---
 
-### Phase 6 — Conformité réglementaire *(~45% — vague 1 livrée)*
+### Phase 6 — Conformité réglementaire *(~80% — vague 2 livrée)*
 
 - [x] Intégrer le plan comptable RCSSFD complet (fichier `lib/assets/docs/Plan des Comptes RCSSFD.txt`)
 - [x] Mapper/remplacer le plan comptable actuel avec les comptes RCSSFD (preset 501/530/521 + sélecteur institution)
 - [x] Export Excel/CSV de la balance au format SYSCOHADA/RCSSFD (`RegulatoryExportService`)
 - [x] En-têtes PDF dynamiques depuis `InstitutionConfiguration` (`InstitutionPdfBranding` → contrat prêt)
-- [ ] Constructeur de rapports dynamiques dans `CustomReportPage` (vraies requêtes SQL)
-- [ ] Export BCEAO/Coban (fichiers plats CSV structurés avec séparateurs spécifiques)
-- [ ] Relevés mensuels d'épargne générés automatiquement (PDF)
-- [ ] Génération PDF dynamique des contrats de prêt (mapper variables SQL sur layout contrat officiel)
-- [ ] Archivage légal : attacher le contrat signé scanné à l'enregistrement du prêt (Blob/Base64)
+- [x] Constructeur de rapports dynamiques dans `CustomReportPage` *(vraies requêtes SQL `rawQuery` — filtres date, journal, compte, montant)*
+- [x] Export BCEAO/Coban (fichiers plats CSV `|`-séparés avec BOM UTF-8) *(3 rapports : encours crédit, dépôts épargne, PAR portefeuille — `BceaoExportService`)*
+- [x] Relevés mensuels d'épargne générés en PDF (`SavingsStatementService`) — ⚠️ déclenchement manuel seulement ; ❌ génération automatique mensuelle planifiée absente
+- [x] Génération PDF dynamique des contrats de prêt (`LoanContractTemplateService` — variables SQL : client, produit, TEG, échéancier, branding)
+- [x] Archivage légal : contrat signé scanné attaché au prêt (FilePicker + stockage fichier local + Base64 BDD dans `LoanDetailDialog`)
 
 ---
 
 ### Phase 7 — Intégrations externes
 
-- [ ] API SMS (Infobip, Twilio ou agrégateur local africain) — approbation prêt, rappels échéances
+- [ ] API SMS (Infobip, Twilio ou agrégateur local africain) — approbation prêt, rappels échéances *(UI pré-sélection prête dans `SmsSendingPage` ; envoi simulé)*
 - [ ] WhatsApp Business API — messages templates pour rappels de paiement
-- [ ] Webhooks Mobile Money (Orange/MTN/Moov) — validation automatique des remboursements
-- [ ] Notifications locales planifiées (échéances du jour, alertes PAR)
+- [ ] Webhooks Mobile Money (Orange/MTN/Moov) — validation automatique des remboursements *(absent)*
+- [ ] Notifications locales planifiées (échéances du jour, alertes PAR) *(package `flutter_local_notifications` absent)*
 - [ ] Calcul des commissions agents (volume recouvré, nouvelle épargne captée)
 - [ ] Alertes push via WebSockets ou notifications locales planifiées (PAR critique, échéances du jour)
+- [ ] Génération automatique mensuelle des relevés épargne (job planifié Flutter ou APScheduler backend)
 
 ---
 
 ## Conclusion
 
-C'est un projet en **phase avancée de prototypage UI** mais encore en début de phase de "logique métier". La fondation est solide. Il faut maintenant combler les couches fonctionnelles : authentification, RBAC, comptabilité automatique, et calculs financiers réels.
+C'est un projet en **phase avancée d'implémentation** — la grande majorité des fonctionnalités métier sont opérationnelles. La fondation (auth, RBAC, comptabilité automatique, sync offline, conformité réglementaire) est solide et bien couverte par les tests (105 tests passent).
 
-Le point de départ logique est le **système d'authentification** — il débloque le RBAC, la sécurité, et donne un contexte utilisateur à tous les autres modules.
+**Ce qui reste à faire :**
+
+| Priorité | Item |
+|---|---|
+| 🟠 Important | Finaliser la migration Flutter DB→API (~40% restant : demandes prêt, remboursements, détail prêt, communications) |
+| 🟠 Important | Brancher une vraie API SMS (Infobip/Twilio) — l'UI est prête |
+| 🟡 Utile | Suivi des réunions de groupes solidaires (onglet Documents fonctionnel) |
+| 🟡 Utile | Caution solidaire : transfert de dette automatique en cas de défaut membre |
+| 🟡 Utile | Génération automatique mensuelle des relevés épargne (job planifié) |
+| 🔵 Optionnel | Scan CNI avec OCR |
+| 🔵 Optionnel | Webhooks Mobile Money |
+| 🔵 Optionnel | Notifications push locales (flutter_local_notifications) |
