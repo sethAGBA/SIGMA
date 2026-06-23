@@ -13,6 +13,7 @@ import '../../models/repayment_model.dart';
 import '../../models/repayment_schedule_model.dart';
 import 'api_service.dart';
 import 'database_service.dart';
+import 'repayment_api_service.dart';
 import 'sync_service.dart';
 
 class LoanApiService {
@@ -29,14 +30,8 @@ class LoanApiService {
       try {
         String path = '/prets';
         if (status != null) path += '?statut=$status';
-        final response = await ApiService().get(path);
-        final data = ApiService.decodeResponse(response);
-        if (data != null) {
-          final items = data is List ? data : (data['items'] as List? ?? []);
-          // Résoudre les Loan depuis le JSON
-          // Pour l'instant on retourne les données locales enrichies
-          // (les modèles Loan sont complexes avec client/produit imbriqués)
-        }
+        await ApiService().get(path);
+        // Données serveur reçues — fallback local enrichi avec relations
       } catch (_) {}
     }
 
@@ -95,12 +90,9 @@ class LoanApiService {
       try {
         String path = '/prets/demandes';
         if (status != null) path += '?statut=$status';
-        final response = await ApiService().get(path);
-        final data = ApiService.decodeResponse(response);
-        if (data != null) {
-          // Sync réussie — retourner le local mis à jour
-          // (les demandes ont des relations complexes client/produit)
-        }
+        await ApiService().get(path);
+        // Sync réussie — retourner le local mis à jour
+        // (les demandes ont des relations complexes client/produit)
       } catch (_) {}
     }
 
@@ -187,7 +179,7 @@ class LoanApiService {
     // et enrichis par le serveur en arrière-plan
     if (await SyncService().isOnline) {
       try {
-        final response = await ApiService().get('/prets/collecte/jour');
+        await ApiService().get('/prets/collecte/jour');
         // Si le serveur répond, on garde le local (plus riche avec noms clients)
       } catch (_) {}
     }
@@ -203,10 +195,35 @@ class LoanApiService {
   }
 
   Future<List<RepaymentSchedule>> getRepaymentSchedules(int pretId) async {
-    return await DatabaseService().getRepaymentSchedules(pretId);
+    if (await SyncService().isOnline) {
+      try {
+        final response = await ApiService().get('/prets/$pretId/echeancier');
+        final data = ApiService.decodeResponse(response);
+        if (data != null) {
+          final items = data is List ? data : (data['items'] as List? ?? []);
+          final schedules = items
+              .map((e) => RepaymentSchedule.fromMap(e as Map<String, dynamic>))
+              .toList();
+          _updateLocalCacheSchedules(pretId, schedules); // fire-and-forget
+          return schedules;
+        }
+      } catch (_) {}
+    }
+    return DatabaseService().getRepaymentSchedules(pretId);
   }
 
   Future<List<Repayment>> getRepayments(int pretId) async {
-    return await DatabaseService().getRepayments(pretId);
+    return RepaymentApiService().getRepayments(pretId);
+  }
+
+  Future<void> _updateLocalCacheSchedules(
+    int pretId,
+    List<RepaymentSchedule> items,
+  ) async {
+    for (final s in items) {
+      try {
+        await DatabaseService().insertRepaymentSchedule(s);
+      } catch (_) {}
+    }
   }
 }

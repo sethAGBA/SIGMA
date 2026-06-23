@@ -9,7 +9,14 @@
 import 'package:flutter/material.dart';
 
 import '../../models/dashboard_data.dart';
+import '../../models/client_model.dart';
+import '../../models/delinquent_loan_details_model.dart';
+import '../../models/executive_stats_model.dart';
+import '../../models/loan_model.dart';
 import '../../models/par_stats_model.dart';
+import '../../models/recovery_action_model.dart';
+import '../../models/repayment_schedule_model.dart';
+import '../../models/reporting_result.dart';
 import 'api_service.dart';
 import 'database_service.dart';
 import 'sync_service.dart';
@@ -63,8 +70,111 @@ class ReportingApiService {
     return DatabaseService().getPARStats();
   }
 
-  // ── Parseurs de réponse serveur ───────────────────────────────────────
+  // ── Executive stats ───────────────────────────────────────────────────
 
+  /// Retourne les statistiques exécutives (direction).
+  ///
+  /// Online  : récupère depuis `/reporting/executive`.
+  /// Offline : calcule les agrégats depuis SQLite via [DatabaseService].
+  /// Exception API → fallback SQLite + `isOfflineFallback: true`.
+  /// Jamais d'exception vers l'appelant.
+  Future<ReportingResult<ExecutiveDashboardStats>> getExecutiveStats() async {
+    if (await SyncService().isOnline) {
+      try {
+        final response = await ApiService().get('/reporting/executive');
+        final data = ApiService.decodeResponse(response);
+        if (data != null && data is Map<String, dynamic>) {
+          final parsed = _parseExecutiveStats(data);
+          return ReportingResult(data: parsed, isOfflineFallback: false);
+        }
+      } catch (_) {
+        // Fallback silencieux vers SQLite
+      }
+    }
+    final local = await DatabaseService().getExecutiveStats();
+    return ReportingResult(data: local, isOfflineFallback: true);
+  }
+
+  // ── Delinquent loans ──────────────────────────────────────────────────
+
+  /// Retourne la liste des prêts en souffrance.
+  ///
+  /// Online  : récupère depuis `/reporting/delinquents?par_category=...`.
+  /// Offline : calcule depuis SQLite via [DatabaseService.getDelinquentLoans()].
+  /// Exception API → fallback SQLite + `isOfflineFallback: true`.
+  /// Jamais d'exception vers l'appelant.
+  Future<ReportingResult<List<Map<String, dynamic>>>> getDelinquentLoans({
+    String? parCategory,
+  }) async {
+    if (await SyncService().isOnline) {
+      try {
+        final path = parCategory != null
+            ? '/reporting/delinquents?par_category=${Uri.encodeQueryComponent(parCategory)}'
+            : '/reporting/delinquents';
+        final response = await ApiService().get(path);
+        final data = ApiService.decodeResponse(response);
+        if (data != null) {
+          final list = data is List
+              ? data.whereType<Map<String, dynamic>>().toList()
+              : (data['items'] as List? ?? [])
+                  .whereType<Map<String, dynamic>>()
+                  .toList();
+          return ReportingResult(data: list, isOfflineFallback: false);
+        }
+      } catch (_) {
+        // Fallback silencieux vers SQLite
+      }
+    }
+    final local = await DatabaseService().getDelinquentLoans(parCategory: parCategory);
+    return ReportingResult(data: local, isOfflineFallback: true);
+  }
+
+  // ── Delinquent loan details ───────────────────────────────────────────
+
+  /// Retourne les détails d'un prêt en souffrance.
+  ///
+  /// Online  : récupère depuis `/reporting/delinquent/{id}`.
+  /// Offline : calcule depuis SQLite via [DatabaseService.getDelinquentLoanDetails(id)].
+  /// Exception API → fallback SQLite + `isOfflineFallback: true`.
+  /// Jamais d'exception vers l'appelant.
+  Future<ReportingResult<DelinquentLoanDetails?>> getDelinquentLoanDetails(int id) async {
+    if (await SyncService().isOnline) {
+      try {
+        final response = await ApiService().get('/reporting/delinquent/$id');
+        final data = ApiService.decodeResponse(response);
+        if (data != null && data is Map<String, dynamic>) {
+          final parsed = _parseDelinquentLoanDetails(data);
+          return ReportingResult(data: parsed, isOfflineFallback: false);
+        }
+      } catch (_) {
+        // Fallback silencieux vers SQLite
+      }
+    }
+    final local = await DatabaseService().getDelinquentLoanDetails(id);
+    return ReportingResult(data: local, isOfflineFallback: true);
+  }
+
+  // ── Recovery stats (toujours local) ──────────────────────────────────
+
+  /// Retourne les statistiques de recouvrement depuis SQLite.
+  ///
+  /// Toujours local — jamais d'appel HTTP, quel que soit l'état de la connexion.
+  Future<ReportingResult<RecoveryStats>> getRecoveryStats() async {
+    final data = await DatabaseService().getRecoveryStats();
+    return ReportingResult(data: data, isOfflineFallback: true);
+  }
+
+  // ── Global recovery actions history (toujours local) ─────────────────
+
+  /// Retourne l'historique global des actions de recouvrement depuis SQLite.
+  ///
+  /// Toujours local — jamais d'appel HTTP, quel que soit l'état de la connexion.
+  Future<ReportingResult<List<RecoveryAction>>> getGlobalRecoveryActionsHistory() async {
+    final data = await DatabaseService().getGlobalRecoveryActionsHistory();
+    return ReportingResult(data: data, isOfflineFallback: true);
+  }
+
+  // ── Parseurs de réponse serveur ───────────────────────────────────────
   /// Convertit la réponse JSON `/reporting/dashboard` en [HomeDashboardData].
   ///
   /// Les champs [DashboardKPI.icon] et [DashboardKPI.color] ne peuvent pas être
@@ -180,5 +290,169 @@ class ReportingApiService {
       parParTranche: toDoubleMap(json['par_par_tranche']),
       parGroupeVsIndiv: toDoubleMap(json['par_groupe_vs_indiv']),
     );
+  }
+
+  // ── Parseurs pour les nouvelles méthodes ─────────────────────────────
+
+  /// Convertit la réponse JSON `/reporting/executive` en [ExecutiveDashboardStats].
+  ///
+  /// En cas de champs manquants, des valeurs neutres par défaut sont utilisées
+  /// pour éviter toute exception de parsing.
+  ExecutiveDashboardStats _parseExecutiveStats(Map<String, dynamic> json) {
+    Map<String, double> toDoubleMap(dynamic raw) {
+      if (raw == null) return {};
+      if (raw is Map) {
+        return raw.map((k, v) => MapEntry(k.toString(), (v as num?)?.toDouble() ?? 0));
+      }
+      return {};
+    }
+
+    List<EvolutionPoint> toEvolutionList(dynamic raw) {
+      if (raw == null) return [];
+      if (raw is List) {
+        return raw.whereType<Map<String, dynamic>>().map((e) {
+          return EvolutionPoint(
+            e['label'] as String? ?? '',
+            (e['value'] as num?)?.toDouble() ?? 0,
+          );
+        }).toList();
+      }
+      return [];
+    }
+
+    final actJson = json['activity'] as Map<String, dynamic>? ?? {};
+    final activity = ActivityStats(
+      activeClientsCount: (actJson['active_clients_count'] as int?) ?? 0,
+      newClientsMonth: (actJson['new_clients_month'] as int?) ?? 0,
+      lapsedClients: (actJson['lapsed_clients'] as int?) ?? 0,
+      penetrationRate: (actJson['penetration_rate'] as num?)?.toDouble() ?? 0,
+      retentionRate: (actJson['retention_rate'] as num?)?.toDouble() ?? 0,
+    );
+
+    final portJson = json['portfolio'] as Map<String, dynamic>? ?? {};
+    final portfolio = PortfolioStats(
+      totalOutstanding: (portJson['total_outstanding'] as num?)?.toDouble() ?? 0,
+      activeLoansCount: (portJson['active_loans_count'] as int?) ?? 0,
+      averageLoanAmount: (portJson['average_loan_amount'] as num?)?.toDouble() ?? 0,
+      monthlyGrowth: (portJson['monthly_growth'] as num?)?.toDouble() ?? 0,
+      disbursementsMonth: (portJson['disbursements_month'] as num?)?.toDouble() ?? 0,
+      repaymentsMonth: (portJson['repayments_month'] as num?)?.toDouble() ?? 0,
+      outstandingByProduct: toDoubleMap(portJson['outstanding_by_product']),
+    );
+
+    final qualJson = json['quality'] as Map<String, dynamic>? ?? {};
+    final quality = QualityStats(
+      par30Rate: (qualJson['par30_rate'] as num?)?.toDouble() ?? 0,
+      repaymentRate: (qualJson['repayment_rate'] as num?)?.toDouble() ?? 0,
+      writeOffRate: (qualJson['write_off_rate'] as num?)?.toDouble() ?? 0,
+      provisionsOutstandingRatio: (qualJson['provisions_outstanding_ratio'] as num?)?.toDouble() ?? 0,
+      par12MonthEvolution: toEvolutionList(qualJson['par12_month_evolution']),
+      repaymentRateEvolution: toEvolutionList(qualJson['repayment_rate_evolution']),
+      doubtfulDebts: (qualJson['doubtful_debts'] as num?)?.toDouble() ?? 0,
+    );
+
+    final savJson = json['savings'] as Map<String, dynamic>? ?? {};
+    final savings = SavingsStats(
+      totalSavings: (savJson['total_savings'] as num?)?.toDouble() ?? 0,
+      accountsCount: (savJson['accounts_count'] as int?) ?? 0,
+      averageSavings: (savJson['average_savings'] as num?)?.toDouble() ?? 0,
+      savingsGrowth: (savJson['savings_growth'] as num?)?.toDouble() ?? 0,
+      savingsCreditRatio: (savJson['savings_credit_ratio'] as num?)?.toDouble() ?? 0,
+      savingsByType: toDoubleMap(savJson['savings_by_type']),
+    );
+
+    final rawAgents = json['top_agents'] as List<dynamic>? ?? [];
+    final topAgents = rawAgents.whereType<Map<String, dynamic>>().map((a) {
+      return AgentPerformanceMetric(
+        name: a['name'] as String? ?? '',
+        volume: (a['volume'] as num?)?.toDouble() ?? 0,
+        parRate: (a['par_rate'] as num?)?.toDouble() ?? 0,
+        collectionRate: (a['collection_rate'] as num?)?.toDouble() ?? 0,
+      );
+    }).toList();
+
+    final rawGeo = json['geographic_distribution'] as List<dynamic>? ?? [];
+    final geographicDistribution = rawGeo.whereType<Map<String, dynamic>>().map((g) {
+      return GeographicPoint(
+        region: g['region'] as String? ?? '',
+        volume: (g['volume'] as num?)?.toDouble() ?? 0,
+        clientCount: (g['client_count'] as int?) ?? 0,
+      );
+    }).toList();
+
+    final rawProducts = json['popular_products'] as List<dynamic>? ?? [];
+    final popularProducts = rawProducts.whereType<Map<String, dynamic>>().map((p) {
+      return ProductDemand(
+        name: p['name'] as String? ?? '',
+        requestCount: (p['request_count'] as int?) ?? 0,
+        totalRequestedAmount: (p['total_requested_amount'] as num?)?.toDouble() ?? 0,
+      );
+    }).toList();
+
+    final finJson = json['financial'] as Map<String, dynamic>? ?? {};
+    final financial = FinancialPerformance(
+      netInterestIncome: (finJson['net_interest_income'] as num?)?.toDouble() ?? 0,
+      feeIncome: (finJson['fee_income'] as num?)?.toDouble() ?? 0,
+      operatingExpenses: (finJson['operating_expenses'] as num?)?.toDouble() ?? 0,
+      netIncome: (finJson['net_income'] as num?)?.toDouble() ?? 0,
+      roe: (finJson['roe'] as num?)?.toDouble() ?? 0,
+      roa: (finJson['roa'] as num?)?.toDouble() ?? 0,
+    );
+
+    final lastUpdateRaw = json['last_update'] as String?;
+    final lastUpdate = lastUpdateRaw != null
+        ? DateTime.tryParse(lastUpdateRaw) ?? DateTime.now()
+        : DateTime.now();
+
+    return ExecutiveDashboardStats(
+      activity: activity,
+      portfolio: portfolio,
+      quality: quality,
+      savings: savings,
+      topAgents: topAgents,
+      geographicDistribution: geographicDistribution,
+      popularProducts: popularProducts,
+      outstanding12MonthEvolution: toEvolutionList(json['outstanding_12_month_evolution']),
+      financial: financial,
+      lastUpdate: lastUpdate,
+    );
+  }
+
+  /// Convertit la réponse JSON `/reporting/delinquent/{id}` en [DelinquentLoanDetails].
+  ///
+  /// Retourne `null` si les données sont insuffisantes pour reconstruire l'objet.
+  DelinquentLoanDetails? _parseDelinquentLoanDetails(Map<String, dynamic> json) {
+    try {
+      final loanJson = json['loan'] as Map<String, dynamic>?;
+      final clientJson = json['client'] as Map<String, dynamic>?;
+      if (loanJson == null || clientJson == null) return null;
+
+      final loan = Loan.fromMap(loanJson);
+      final client = Client.fromMap(clientJson);
+
+      final rawSchedules = json['unpaid_schedules'] as List<dynamic>? ?? [];
+      final unpaidSchedules = rawSchedules
+          .whereType<Map<String, dynamic>>()
+          .map((s) => RepaymentSchedule.fromMap(s))
+          .toList();
+
+      final rawActions = json['recovery_actions'] as List<dynamic>? ?? [];
+      final recoveryActions = rawActions
+          .whereType<Map<String, dynamic>>()
+          .map((a) => RecoveryAction.fromMap(a))
+          .toList();
+
+      return DelinquentLoanDetails(
+        loan: loan,
+        client: client,
+        unpaidSchedules: unpaidSchedules,
+        penalitesAccumulees: (json['penalites_accumulees'] as num?)?.toDouble() ?? 0,
+        provisionConstituee: (json['provision_constituee'] as num?)?.toDouble() ?? 0,
+        joursRetard: (json['jours_retard'] as int?) ?? 0,
+        recoveryActions: recoveryActions,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 }

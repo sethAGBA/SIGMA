@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from datetime import datetime
 import uuid
@@ -109,3 +110,19 @@ def list_remboursements(
     if pret_id:
         query = query.filter(Remboursement.pret_id == pret_id)
     return query.order_by(Remboursement.date_paiement.desc()).all()
+
+
+@router.get("/history")
+def get_global_history(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """Historique global paginé de tous les remboursements."""
+    offset = (page - 1) * limit
+    items = db.query(Remboursement).order_by(
+        Remboursement.date_paiement.desc()
+    ).offset(offset).limit(limit).all()
+    total = db.query(func.count(Remboursement.id)).scalar()
+    return {"items": items, "total": total, "page": page, "limit": limit}

@@ -14,6 +14,7 @@ from app.jobs.scheduler import start_scheduler
 from app.routers import (
     auth, clients, groupes, produits, prets, remboursements,
     epargne, caisse, comptabilite, agents, agencies, reporting, configuration,
+    demandes_pret,
 )
 
 
@@ -66,6 +67,7 @@ app.include_router(agents.router, prefix=PREFIX)
 app.include_router(agencies.router, prefix=PREFIX)
 app.include_router(reporting.router, prefix=PREFIX)
 app.include_router(configuration.router, prefix=PREFIX)
+app.include_router(demandes_pret.router, prefix=PREFIX)
 
 
 @app.get("/")
